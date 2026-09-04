@@ -94,19 +94,18 @@ export default function FindingEditor({
         <div className="issue" key={i}><b>Incomplete</b>{m}</div>
       ))}
 
-      <div className="grp">
-        <h4>Identity</h4>
+      <G n={1} name="Identity" count={4} purpose="What this finding is. The reference never changes once issued, and the title is stated as a claim rather than a topic.">
         <div className="two">
           <F label="Reference"><input value={f.ref} onChange={(e) => set('ref', e.target.value)} /></F>
           <F label="Pillar"><input value={f.pillar ?? ''} onChange={(e) => set('pillar', e.target.value)} /></F>
         </div>
-        <F label="Title, stated as a claim">
-          <input value={f.title} onChange={(e) => set('title', e.target.value)} />
+        <F label="Title, stated as a claim" lead>
+          <input value={f.title} onChange={(e) => set('title', e.target.value)}
+                 placeholder="The staging subdomain is fully indexed" />
         </F>
-      </div>
+      </G>
 
-      <div className="grp">
-        <h4>Scope</h4>
+      <G n={2} name="Scope" count={3} purpose="How much of the site it touches. A template-level issue is one fix; a page-level issue is many.">
         <div className="three">
           <F label="URLs affected">
             <input type="number" value={f.urls_affected ?? ''} onChange={(e) => set('urls_affected', num(e.target.value))} />
@@ -118,10 +117,9 @@ export default function FindingEditor({
             <input value={f.markets.join(', ')} onChange={(e) => set('markets', list(e.target.value))} />
           </F>
         </div>
-      </div>
+      </G>
 
-      <div className="grp">
-        <h4>Evidence</h4>
+      <G n={3} name="Evidence" count={5} purpose="How we know. Measurements are the numbers that support the claim; exhibits are what shows it.">
         <Measurements value={f.measurements} onChange={(v) => set('measurements', v)} />
         <div className="three">
           <F label="Sources" hint="comma separated">
@@ -145,10 +143,9 @@ export default function FindingEditor({
           </F>
         </div>
         <Exhibits finding={f} onChange={onChange} />
-      </div>
+      </G>
 
-      <div className="grp">
-        <h4>Impact</h4>
+      <G n={4} name="Impact" count={6} purpose="What it costs. Any quantity asserted here has to state where it came from.">
         <div className="two">
           <F label="Impact type">
             <select value={f.impact_type ?? ''} onChange={(e) => set('impact_type', (e.target.value || null) as never)}>
@@ -168,7 +165,7 @@ export default function FindingEditor({
             <input value={f.quantity_unit ?? ''} onChange={(e) => set('quantity_unit', e.target.value)} placeholder="sessions_per_month" />
           </F>
         </div>
-        <F label="Impact basis" hint="Required whenever a quantity is asserted. One sentence saying where the number came from.">
+        <F label="Impact basis" required hint="One sentence saying where the quantity came from. No number ships without it.">
           <textarea value={f.impact_basis ?? ''} onChange={(e) => set('impact_basis', e.target.value)} />
         </F>
         <div className="two">
@@ -190,10 +187,9 @@ export default function FindingEditor({
             </div>
           </F>
         </div>
-      </div>
+      </G>
 
-      <div className="grp">
-        <h4>Remedy</h4>
+      <G n={5} name="Remedy" count={6} purpose="What to do about it, written so a competent engineer can act without asking a follow-up question.">
         <F label="Action"><input value={f.action ?? ''} onChange={(e) => set('action', e.target.value)} /></F>
         <F label="Steps" hint="one per line">
           <textarea value={f.steps.join('\n')} onChange={(e) => set('steps', e.target.value.split('\n').filter((s) => s.trim()))} />
@@ -206,10 +202,9 @@ export default function FindingEditor({
             <input value={f.dependencies.join(', ')} onChange={(e) => set('dependencies', list(e.target.value))} />
           </F>
         </div>
-      </div>
+      </G>
 
-      <div className="grp">
-        <h4>Risk and priority</h4>
+      <G n={6} name="Risk and priority" count={8} purpose="What could go wrong fixing it, and the inputs the score is computed from. None of these are typed opinions about the score itself.">
         <div className="four">
           <F label="Blast radius, 1 to 3"><input type="number" min={1} max={3} value={f.blast_radius ?? ''} onChange={(e) => set('blast_radius', num(e.target.value))} /></F>
           <F label="Failure likelihood, 1 to 3"><input type="number" min={1} max={3} value={f.failure_likelihood ?? ''} onChange={(e) => set('failure_likelihood', num(e.target.value))} /></F>
@@ -222,10 +217,9 @@ export default function FindingEditor({
           <F label="Confidence factor, 0 to 1"><input type="number" step="0.05" min={0} max={1} value={f.confidence_factor ?? ''} onChange={(e) => set('confidence_factor', num(e.target.value))} /></F>
           <F label="Leverage, 1 to 5"><input type="number" min={1} max={5} value={f.leverage ?? ''} onChange={(e) => set('leverage', num(e.target.value))} /></F>
         </div>
-      </div>
+      </G>
 
-      <div className="grp">
-        <h4>Lifecycle</h4>
+      <G n={7} name="Lifecycle" count={5} purpose="What happens after delivery. This is the part that keeps the register useful six months later.">
         <div className="two">
           <F label="Status">
             <select value={f.status} onChange={(e) => set('status', e.target.value as never)}>
@@ -234,14 +228,14 @@ export default function FindingEditor({
           </F>
           <F label="Verify by"><input type="date" value={f.verify_by ?? ''} onChange={(e) => set('verify_by', e.target.value || null)} /></F>
         </div>
-        <F label="Verification method" hint="Written before the fix, not after.">
+        <F label="Verification method" required hint="The exact check that proves it is fixed. Written before the fix, not after.">
           <textarea value={f.verification_method ?? ''} onChange={(e) => set('verification_method', e.target.value)} />
         </F>
         <div className="two">
           <F label="Verified on"><input type="date" value={f.verified_on ?? ''} onChange={(e) => set('verified_on', e.target.value || null)} /></F>
           <F label="Closed note"><input value={f.closed_note ?? ''} onChange={(e) => set('closed_note', e.target.value)} /></F>
         </div>
-      </div>
+      </G>
 
       <button className="btn danger" onClick={async () => {
         if (confirm(`Delete ${f.ref}?`)) { await deleteFinding(f.id); onDeleted() }
@@ -250,13 +244,47 @@ export default function FindingEditor({
   )
 }
 
-function F({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function F({
+  label, hint, children, lead, required,
+}: {
+  label: string
+  hint?: string
+  children: React.ReactNode
+  /** The claim the whole record hangs off. Set larger. */
+  lead?: boolean
+  /** The editor refuses to call the finding complete without these. */
+  required?: boolean
+}) {
   return (
-    <div className="fld">
+    <div className={`fld${lead ? ' lead' : ''}${required ? ' required' : ''}`}>
       <label>{label}</label>
       {children}
       {hint && <div className="hint">{hint}</div>}
     </div>
+  )
+}
+
+/** One of the eight field groups. The number and purpose line are what make
+ *  the eight read as a sequence rather than one long undifferentiated form. */
+function G({
+  n, name, purpose, count, children,
+}: {
+  n: number
+  name: string
+  purpose: string
+  count: number
+  children: React.ReactNode
+}) {
+  return (
+    <section className="grp">
+      <header>
+        <span className="num">{String(n).padStart(2, '0')}</span>
+        <h4>{name}</h4>
+        <span className="cnt">{count} fields</span>
+      </header>
+      <p className="purpose">{purpose}</p>
+      {children}
+    </section>
   )
 }
 
