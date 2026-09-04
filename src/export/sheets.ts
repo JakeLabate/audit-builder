@@ -50,7 +50,11 @@ function loadGsi(): Promise<void> {
 }
 
 export function sheetsConfigured(): boolean {
-  return Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID)
+  // A real Google client id always ends in .apps.googleusercontent.com.
+  // Checking the shape rather than just presence means a placeholder value
+  // leaves the button disabled instead of enabling it to fail on click.
+  const id = import.meta.env.VITE_GOOGLE_CLIENT_ID
+  return Boolean(id && id.endsWith('.apps.googleusercontent.com'))
 }
 
 async function getToken(): Promise<string> {
