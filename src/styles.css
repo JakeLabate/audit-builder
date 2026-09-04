@@ -59,11 +59,17 @@ h1.page{font-family:var(--disp);font-weight:700;font-size:26px;letter-spacing:-.
 .empty b{display:block;font-family:var(--disp);font-size:16px;color:var(--ink);margin-bottom:6px}
 
 /* forms */
-.fld{margin-bottom:15px;min-width:0}
+/* Columns: help text of different lengths would otherwise leave the inputs
+   at different heights across a row, so the control is pushed to the bottom
+   and every field in a row lines up. */
+.fld{margin-bottom:15px;min-width:0;display:flex;flex-direction:column}
+.fld>input,.fld>select,.fld>textarea{margin-top:auto}
 .fld label{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
 .fld input,.fld select,.fld textarea{width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);padding:7px 10px;font-size:14px}
 .fld textarea{min-height:70px;resize:vertical;line-height:1.5}
-.fld .hint{font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.45}
+/* Help sits between the label and the control, so it is read before the field
+   is filled in rather than after. */
+.fld .hint{font-size:12px;color:var(--muted);margin:0 0 9px;line-height:1.45;max-width:62ch}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
 .three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
 .four{display:grid;grid-template-columns:repeat(4,1fr);gap:0 12px}
@@ -92,31 +98,49 @@ h1.page{font-family:var(--disp);font-weight:700;font-size:26px;letter-spacing:-.
    2. field label     mono 9.5px, quiet, clearly subordinate
    3. field value     body 14px, or 17px for the two fields that lead
    Groups are panels so each one reads as a block rather than a run of rows. */
+/* Panels. Flat sections blur together across seven groups: whitespace alone
+   is not a strong enough divider once every group has a heading, a purpose
+   line and a rule of its own. */
 .grp{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
-  padding:22px 24px 10px;margin-bottom:18px}
+  padding:22px 24px 10px;margin-bottom:18px;max-width:860px}
 /* Heading carries the level on its own now, so it is set a little larger. */
 .grp>h4{font-family:var(--disp);font-weight:700;font-size:18.5px;letter-spacing:-.02em;
   color:var(--ink);margin:0 0 5px;text-transform:none}
 .grp>.purpose{font-size:13.5px;color:var(--muted);margin:0 0 16px;max-width:64ch;line-height:1.5}
 /* The divider belongs to the panel, not to the text, so it spans the full
    width even though the purpose line is capped for readability. */
-.grp>.purpose+*{border-top:1px solid var(--line);padding-top:17px}
+.grp>.purpose+*{border-top:1px solid var(--line);padding-top:20px}
 
-.fld{margin-bottom:15px;min-width:0}
-.fld label{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--label);margin-bottom:6px;font-weight:500}
+/* Columns: help text of different lengths would otherwise leave the inputs
+   at different heights across a row, so the control is pushed to the bottom
+   and every field in a row lines up. */
+.fld{margin-bottom:15px;min-width:0;display:flex;flex-direction:column}
+.fld>input,.fld>select,.fld>textarea{margin-top:auto}
+/* The field name has to outrank its own description. Small uppercase mono was
+   both smaller and visually quieter than the help text beneath it, which read
+   as backwards. Name is now larger, heavier, darker and sentence case; the
+   description is smaller, lighter and regular weight. */
+.fld label{display:block;font-family:var(--body);font-size:13.5px;font-weight:600;
+  letter-spacing:-.006em;text-transform:none;color:var(--ink);margin-bottom:3px}
 .fld input,.fld select,.fld textarea{width:100%;background:var(--surface);
-  border:1px solid var(--line-2);border-radius:var(--r);padding:7px 10px;font-size:14px}
+  border:1px solid var(--line-2);border-radius:var(--r);padding:8px 11px;font-size:14px;
+  color:var(--ink)}
+.fld input:hover,.fld select:hover,.fld textarea:hover{border-color:var(--muted)}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--teal);
+  box-shadow:0 0 0 3px rgba(14,140,139,.12);outline:none}
 .fld textarea{min-height:70px;resize:vertical;line-height:1.5}
-.fld .hint{font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.45}
+/* Help sits between the label and the control, so it is read before the field
+   is filled in rather than after. */
+.fld .hint{font-size:12px;color:var(--muted);margin:0 0 9px;line-height:1.45;max-width:62ch}
 
 /* the finding's own claim leads the record, so it is set larger */
 .fld.lead input{font-family:var(--disp);font-weight:600;font-size:17px;letter-spacing:-.012em;
   padding:9px 11px;color:var(--ink)}
 
 /* the two fields the editor refuses to call complete without */
-.fld.required label::after{content:"required";margin-left:8px;font-size:9px;font-weight:500;letter-spacing:.09em;
-  color:var(--amber);border:1px solid currentColor;border-radius:2px;padding:1px 4px}
+.fld.required label::after{content:"Required";margin-left:8px;font-family:var(--mono);font-size:9px;
+  font-weight:500;letter-spacing:.09em;text-transform:uppercase;vertical-align:1px;
+  color:var(--amber);border:1px solid currentColor;border-radius:2px;padding:1.5px 5px}
 .fld.required textarea,.fld.required input{border-left:2px solid var(--amber)}
 
 .two{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
@@ -125,19 +149,38 @@ h1.page{font-family:var(--disp);font-weight:700;font-size:26px;letter-spacing:-.
 @media (max-width:760px){.two,.three,.four{grid-template-columns:1fr}}
 
 .ttl{font-family:var(--disp);font-weight:700;font-size:25px;letter-spacing:-.024em;
-  color:var(--ink);margin:0 0 3px;line-height:1.15}
+  color:var(--ink);margin:0 0 3px;line-height:1.15;max-width:860px}
 .idline{font-family:var(--mono);font-size:11px;color:var(--label);margin-bottom:22px;
   letter-spacing:.06em}
 
-.scorebox{display:flex;align-items:center;gap:16px;background:var(--ink);color:#fff;border-radius:var(--r);padding:14px 18px;margin-bottom:20px}
-.scorebox .n{font-family:var(--disp);font-weight:700;font-size:38px;line-height:1;letter-spacing:-.035em}
-.scorebox .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
-.scorebox .why{font-size:12.5px;opacity:.8;margin-top:3px;font-family:var(--body);letter-spacing:0;text-transform:none}
+/* The score is the most contested number in the document, so it shows the
+   terms it came from. Naming each term matters: a row of bare numbers is
+   not an explanation. */
+.scorebox{display:flex;align-items:stretch;gap:0;background:var(--ink);color:#fff;
+  border-radius:var(--r);margin-bottom:34px;overflow:hidden;max-width:860px}
+.scorebox .big{padding:16px 22px;display:flex;flex-direction:column;justify-content:center;
+  border-right:1px solid rgba(255,255,255,.14);min-width:150px}
+.scorebox .n{font-family:var(--disp);font-weight:700;font-size:40px;line-height:1;letter-spacing:-.035em}
+.scorebox .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
+  opacity:.72;margin-top:7px}
+.scorebox .terms{flex:1;display:grid;grid-template-columns:repeat(6,1fr);gap:0}
+.scorebox .terms>div{padding:14px 12px;border-left:1px solid rgba(255,255,255,.09)}
+.scorebox .terms>div:first-child{border-left:0}
+.scorebox .terms .k{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.11em;
+  text-transform:uppercase;opacity:.62;margin-bottom:5px}
+.scorebox .terms .v{display:block;font-family:var(--disp);font-weight:600;font-size:15px;
+  letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+@media (max-width:900px){
+  .scorebox{flex-direction:column}
+  .scorebox .big{border-right:0;border-bottom:1px solid rgba(255,255,255,.14)}
+  .scorebox .terms{grid-template-columns:repeat(3,1fr)}
+  .scorebox .terms>div:nth-child(4){border-left:0}
+}
 
-.issue{border-left:3px solid var(--amber);background:#FDF6E7;padding:10px 13px;margin-bottom:9px;font-size:13px;color:var(--ink-2)}
+.issue{border-left:3px solid var(--amber);background:#FDF6E7;padding:11px 14px;margin-bottom:9px;font-size:13px;color:var(--ink-2);max-width:860px}
 .issue b{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
 
-.rep{border:1px solid var(--line);border-radius:var(--r);padding:13px 15px;margin-bottom:11px;background:var(--surface)}
+.rep{border:1px solid var(--line);border-radius:var(--r);padding:15px 17px;margin-bottom:12px;background:var(--surface)}
 .rep .rh{display:flex;align-items:center;gap:9px;margin-bottom:10px}
 .rep .kind{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--teal-d);border:1px solid var(--teal);border-radius:var(--r);padding:3px 8px}
 .rep img{max-width:100%;border:1px solid var(--line);border-radius:var(--r);margin-top:8px;display:block}
