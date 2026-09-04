@@ -70,27 +70,67 @@ h1.page{font-family:var(--disp);font-weight:700;font-size:26px;letter-spacing:-.
 .split{display:grid;grid-template-columns:minmax(0,330px) minmax(0,1fr);gap:0;height:calc(100vh - 54px)}
 @media (max-width:960px){.split{grid-template-columns:1fr;height:auto}}
 .list{border-right:1px solid var(--line);overflow-y:auto;background:var(--surface)}
-.pane{overflow-y:auto;padding:24px 26px 90px}
+.pane{overflow-y:auto;padding:26px 28px 90px;background:var(--bg)}
 .listbar{position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;z-index:5}
 .listbar input{flex:1;border:1px solid var(--line-2);border-radius:var(--r);padding:6px 9px;font-size:13px}
 .frow{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:0 10px;align-items:baseline;padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer}
 .frow:hover{background:var(--wash)}
 .frow[aria-selected=true]{background:var(--wash);box-shadow:inset 3px 0 0 var(--teal)}
 .frow .ref{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
-.frow .nm{font-size:13.8px;color:var(--ink);line-height:1.35;min-width:0}
-.frow .nm span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.frow .nm{font-size:14.5px;font-weight:500;color:var(--ink);line-height:1.3;min-width:0}
+.frow .nm span{display:block;font-size:11.5px;font-weight:400;color:var(--muted);margin-top:3px}
 .pill{font-family:var(--mono);font-size:9.5px;font-weight:500;letter-spacing:.08em;padding:2px 6px;border-radius:var(--r);color:#fff;white-space:nowrap}
 .pill.P1{background:var(--crim)} .pill.P2{background:var(--amber)}
 .pill.P3{background:var(--violet)} .pill.P4{background:var(--muted)}
 .pill.none{background:var(--wash);color:var(--muted);border:1px solid var(--line-2)}
 
-.grp{margin-bottom:26px}
-.grp>h4{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--teal-d);margin:0 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
-.ttl{font-family:var(--disp);font-weight:700;font-size:21px;letter-spacing:-.02em;color:var(--ink);margin:0 0 3px}
-.idline{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:18px}
+/* ---------- finding editor: three typographic levels ----------
+   1. group heading   display 17px, numbered, with a purpose line
+   2. field label     mono 9.5px, quiet, clearly subordinate
+   3. field value     body 14px, or 17px for the two fields that lead
+   Groups are panels so each one reads as a block rather than a run of rows. */
+.grp{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:20px 22px 8px;margin-bottom:16px}
+.grp>header{display:flex;align-items:baseline;gap:11px;margin:0 0 4px}
+.grp>header .num{font-family:var(--mono);font-size:11px;color:var(--teal);letter-spacing:.1em;
+  font-variant-numeric:tabular-nums}
+.grp>header h4{font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:-.018em;
+  color:var(--ink);margin:0;text-transform:none}
+.grp>header .cnt{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.grp>.purpose{font-size:13px;color:var(--muted);margin:0 0 16px;max-width:64ch}
+/* The divider belongs to the panel, not to the text, so it spans the full
+   width even though the purpose line is capped for readability. */
+.grp>.purpose+*{border-top:1px solid var(--line);padding-top:17px}
+
+.fld{margin-bottom:15px;min-width:0}
+.fld label{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:5px;font-weight:400}
+.fld input,.fld select,.fld textarea{width:100%;background:var(--surface);
+  border:1px solid var(--line-2);border-radius:var(--r);padding:7px 10px;font-size:14px}
+.fld textarea{min-height:70px;resize:vertical;line-height:1.5}
+.fld .hint{font-size:12px;color:var(--muted);margin-top:4px}
+
+/* the finding's own claim leads the record, so it is set larger */
+.fld.lead input{font-family:var(--disp);font-weight:600;font-size:17px;letter-spacing:-.012em;
+  padding:9px 11px;color:var(--ink)}
+
+/* the two fields the editor refuses to call complete without */
+.fld.required label::after{content:"required";margin-left:7px;font-size:8.5px;letter-spacing:.1em;
+  color:var(--amber);border:1px solid currentColor;border-radius:2px;padding:1px 4px}
+.fld.required textarea,.fld.required input{border-left:2px solid var(--amber)}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
+.four{display:grid;grid-template-columns:repeat(4,1fr);gap:0 12px}
+@media (max-width:760px){.two,.three,.four{grid-template-columns:1fr}}
+
+.ttl{font-family:var(--disp);font-weight:700;font-size:25px;letter-spacing:-.024em;
+  color:var(--ink);margin:0 0 3px;line-height:1.15}
+.idline{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:20px;
+  letter-spacing:.06em}
 
 .scorebox{display:flex;align-items:center;gap:16px;background:var(--ink);color:#fff;border-radius:var(--r);padding:14px 18px;margin-bottom:20px}
-.scorebox .n{font-family:var(--disp);font-weight:700;font-size:30px;line-height:1;letter-spacing:-.03em}
+.scorebox .n{font-family:var(--disp);font-weight:700;font-size:38px;line-height:1;letter-spacing:-.035em}
 .scorebox .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
 .scorebox .why{font-size:12.5px;opacity:.8;margin-top:3px;font-family:var(--body);letter-spacing:0;text-transform:none}
 
