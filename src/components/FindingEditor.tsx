@@ -25,6 +25,112 @@ function useAutosave(id: string, patch: Record<string, unknown>, enabled: boolea
   return state
 }
 
+/**
+ * Scored fields are stored as numbers because the formula needs numbers, but a
+ * bare "2" in a box tells a new user nothing. Each scale is presented as its
+ * meaning; the number rides along so the value stays legible and auditable.
+ */
+type Scale = [value: number, label: string][]
+
+const BLAST: Scale = [
+  [1, '1 · A single page or a non-production host'],
+  [2, '2 · One template or one section of the site'],
+  [3, '3 · The whole site'],
+]
+const LIKELIHOOD: Scale = [
+  [1, '1 · A config change, hard to get wrong'],
+  [2, '2 · A template edit carrying real logic'],
+  [3, '3 · A rewrite or a migration'],
+]
+const REVERSIBILITY: Scale = [
+  [2, '2 · A toggle you can flip straight back'],
+  [1, '1 · Undoable, but it takes work'],
+  [0, '0 · Permanent once it ships'],
+]
+const SEVERITY: Scale = [
+  [5, '5 · Critical, costing traffic or trust now'],
+  [4, '4 · High, clear harm that will not self-correct'],
+  [3, '3 · Medium, real but bounded'],
+  [2, '2 · Low, mostly hygiene'],
+  [1, '1 · Cosmetic'],
+]
+const REACH: Scale = [
+  [1, '1.0 · Every relevant page'],
+  [0.75, '0.75 · Most of them'],
+  [0.5, '0.5 · About half'],
+  [0.25, '0.25 · A minority'],
+  [0.1, '0.1 · A handful'],
+]
+const CONF_FACTOR: Scale = [
+  [1, '1.0 · Certain, several signals agree'],
+  [0.75, '0.75 · Likely, one solid signal'],
+  [0.5, '0.5 · Plausible, evidence is indirect'],
+  [0.25, '0.25 · Suspected, needs verifying'],
+]
+const LEVERAGE: Scale = [
+  [5, '5 · Unblocks a lot of later work'],
+  [4, '4 · Unblocks several other fixes'],
+  [3, '3 · Unblocks one or two'],
+  [2, '2 · Minor knock-on benefit'],
+  [1, '1 · Stands alone'],
+]
+
+/** A scale rendered as its meanings. Keeps any pre-existing off-scale value. */
+function ScaleSelect({
+  value, scale, onChange,
+}: {
+  value: number | null
+  scale: Scale
+  onChange: (v: number | null) => void
+}) {
+  const known = scale.some(([v]) => v === value)
+  return (
+    <select
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
+    >
+      <option value="">Not set</option>
+      {!known && value != null && <option value={value}>{value} (set manually)</option>}
+      {scale.map(([v, label]) => (
+        <option key={v} value={v}>{label}</option>
+      ))}
+    </select>
+  )
+}
+
+/** Enum options written as sentences rather than database values. */
+const IMPACT_LABEL: Record<string, string> = {
+  duplicate_content: 'Duplicate content · indexed more than once',
+  crawl_waste: 'Crawl waste · effort spent on pages that cannot earn it',
+  lost_visibility: 'Lost visibility · should rank or be cited, and is not',
+  broken_experience: 'Broken experience · users hit something that fails',
+  compliance_exposure: 'Compliance exposure · a legal or policy risk',
+}
+const HORIZON_LABEL: Record<string, string> = {
+  already_happening: 'Already happening · costing something today',
+  next_crawl_cycle: 'Next crawl cycle · days to weeks',
+  next_release: 'Next release · bites when the next change ships',
+  latent: 'Latent · harmless until something else changes',
+}
+const PARTY_LABEL: Record<string, string> = {
+  end_users: 'End users',
+  crawlers: 'Search engines and crawlers',
+  internal_team: 'The internal team',
+}
+const STATUS_LABEL: Record<string, string> = {
+  open: 'Open · nobody has started',
+  in_progress: 'In progress · work has begun',
+  fixed: 'Fixed · shipped, not yet checked',
+  verified: 'Verified · checked and confirmed',
+  reopened: 'Reopened · it came back',
+  accepted_risk: 'Accepted risk · a deliberate decision not to fix',
+}
+const CONFIDENCE_LABEL: Record<string, string> = {
+  high: 'High · several independent signals agree',
+  medium: 'Medium · one signal, or it varies run to run',
+  low: 'Low · indirect, flag it as provisional',
+}
+
 const IMPACT_TYPES = ['duplicate_content','crawl_waste','lost_visibility','broken_experience','compliance_exposure'] as const
 const HORIZONS = ['already_happening','next_crawl_cycle','next_release','latent'] as const
 const PARTIES: AffectedParty[] = ['end_users','crawlers','internal_team']
@@ -77,16 +183,24 @@ export default function FindingEditor({
       <div className="idline">{f.ref} &nbsp;·&nbsp; {f.status.replace('_', ' ')}</div>
 
       <div className="scorebox">
-        <div>
+        <div className="big">
           <div className="n">{f.score ?? '--'}</div>
           <div className="l">{f.band ? `${f.band} / ${BAND_LABEL[f.band]}` : 'Not scored'}</div>
         </div>
-        <div style={{ flex: 1 }}>
-          <div className="l">How it computes</div>
-          <div className="why">
-            ({f.severity_weight ?? '?'} x {f.reach ?? 1} x {f.confidence_factor ?? 1} x {f.leverage ?? 1})
-            {' / '}sqrt({f.effort_days ?? '?'}) x {f.risk_factor}
-          </div>
+        <div className="terms">
+          {[
+            ['Severity', f.severity_weight, 'how bad on its own terms, 1 to 5'],
+            ['Reach', f.reach, 'share of relevant surface affected, 0 to 1'],
+            ['Confidence', f.confidence_factor, 'discount when the evidence is thinner, 0 to 1'],
+            ['Leverage', f.leverage, 'how much other work this unblocks, 1 to 5'],
+            ['Effort', f.effort_days == null ? null : `${f.effort_days}d`, 'engineering days'],
+            ['Risk', f.risk_factor, 'computed from blast radius, likelihood and reversibility'],
+          ].map(([label, value, tip]) => (
+            <div key={String(label)} title={String(tip)}>
+              <span className="k">{label}</span>
+              <span className="v">{value ?? 'not set'}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -110,10 +224,10 @@ export default function FindingEditor({
           <F label="URLs affected">
             <input type="number" value={f.urls_affected ?? ''} onChange={(e) => set('urls_affected', num(e.target.value))} />
           </F>
-          <F label="Templates" hint="comma separated">
+          <F label="Templates">
             <input value={f.templates.join(', ')} onChange={(e) => set('templates', list(e.target.value))} />
           </F>
-          <F label="Markets" hint="comma separated">
+          <F label="Markets">
             <input value={f.markets.join(', ')} onChange={(e) => set('markets', list(e.target.value))} />
           </F>
         </div>
@@ -122,7 +236,7 @@ export default function FindingEditor({
       <G name="Evidence" purpose="How we know. Measurements are the numbers that support the claim; exhibits are what shows it.">
         <Measurements value={f.measurements} onChange={(v) => set('measurements', v)} />
         <div className="three">
-          <F label="Sources" hint="comma separated">
+          <F label="Sources">
             <input value={f.source.join(', ')} onChange={(e) => set('source', list(e.target.value))} />
           </F>
           <F label="Collected from">
@@ -135,7 +249,10 @@ export default function FindingEditor({
         <div className="two">
           <F label="Confidence">
             <select value={f.confidence ?? ''} onChange={(e) => set('confidence', (e.target.value || null) as never)}>
-              <option value="">not set</option><option>high</option><option>medium</option><option>low</option>
+              <option value="">Not set</option>
+              {(['high', 'medium', 'low'] as const).map((v) => (
+                <option key={v} value={v}>{CONFIDENCE_LABEL[v]}</option>
+              ))}
             </select>
           </F>
           <F label="Reason, if below high">
@@ -149,8 +266,8 @@ export default function FindingEditor({
         <div className="two">
           <F label="Impact type">
             <select value={f.impact_type ?? ''} onChange={(e) => set('impact_type', (e.target.value || null) as never)}>
-              <option value="">not set</option>
-              {IMPACT_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+              <option value="">Not set</option>
+              {IMPACT_TYPES.map((t) => <option key={t} value={t}>{IMPACT_LABEL[t]}</option>)}
             </select>
           </F>
           <F label="Metric at risk">
@@ -165,14 +282,14 @@ export default function FindingEditor({
             <input value={f.quantity_unit ?? ''} onChange={(e) => set('quantity_unit', e.target.value)} placeholder="sessions_per_month" />
           </F>
         </div>
-        <F label="Impact basis" required hint="One sentence saying where the quantity came from. No number ships without it.">
+        <F label="Impact basis" required hint="Where the quantity above came from, in one sentence. Nothing is published with a number that cannot say this.">
           <textarea value={f.impact_basis ?? ''} onChange={(e) => set('impact_basis', e.target.value)} />
         </F>
         <div className="two">
           <F label="Time horizon">
             <select value={f.time_horizon ?? ''} onChange={(e) => set('time_horizon', (e.target.value || null) as never)}>
-              <option value="">not set</option>
-              {HORIZONS.map((h) => <option key={h} value={h}>{h.replace(/_/g, ' ')}</option>)}
+              <option value="">Not set</option>
+              {HORIZONS.map((h) => <option key={h} value={h}>{HORIZON_LABEL[h]}</option>)}
             </select>
           </F>
           <F label="Affects">
@@ -181,7 +298,7 @@ export default function FindingEditor({
                 <button key={p} type="button"
                   className={`btn sm${f.affects.includes(p) ? ' pri' : ''}`}
                   onClick={() => set('affects', f.affects.includes(p) ? f.affects.filter((x) => x !== p) : [...f.affects, p])}>
-                  {p.replace(/_/g, ' ')}
+                  {PARTY_LABEL[p]}
                 </button>
               ))}
             </div>
@@ -191,14 +308,14 @@ export default function FindingEditor({
 
       <G name="Remedy" purpose="What to do about it, written so a competent engineer can act without asking a follow-up question.">
         <F label="Action"><input value={f.action ?? ''} onChange={(e) => set('action', e.target.value)} /></F>
-        <F label="Steps" hint="one per line">
+        <F label="Steps">
           <textarea value={f.steps.join('\n')} onChange={(e) => set('steps', e.target.value.split('\n').filter((s) => s.trim()))} />
         </F>
         <div className="four">
           <F label="Owner"><input value={f.owner ?? ''} onChange={(e) => set('owner', e.target.value)} /></F>
           <F label="Effort, days"><input type="number" step="0.5" value={f.effort_days ?? ''} onChange={(e) => set('effort_days', num(e.target.value))} /></F>
           <F label="Wave"><input type="number" value={f.wave ?? ''} onChange={(e) => set('wave', num(e.target.value))} /></F>
-          <F label="Depends on" hint="refs, comma separated">
+          <F label="Depends on">
             <input value={f.dependencies.join(', ')} onChange={(e) => set('dependencies', list(e.target.value))} />
           </F>
         </div>
@@ -206,16 +323,16 @@ export default function FindingEditor({
 
       <G name="Risk and priority" purpose="What could go wrong fixing it, and the inputs the score is computed from. None of these are typed opinions about the score itself.">
         <div className="four">
-          <F label="Blast radius, 1 to 3"><input type="number" min={1} max={3} value={f.blast_radius ?? ''} onChange={(e) => set('blast_radius', num(e.target.value))} /></F>
-          <F label="Failure likelihood, 1 to 3"><input type="number" min={1} max={3} value={f.failure_likelihood ?? ''} onChange={(e) => set('failure_likelihood', num(e.target.value))} /></F>
-          <F label="Reversibility, 0 to 2"><input type="number" min={0} max={2} value={f.reversibility ?? ''} onChange={(e) => set('reversibility', num(e.target.value))} /></F>
-          <F label="Risk factor" hint="computed"><input value={f.risk_factor ?? ''} readOnly /></F>
+          <F label="Blast radius"><ScaleSelect value={f.blast_radius} scale={BLAST} onChange={(v) => set('blast_radius', v)} /></F>
+          <F label="Failure likelihood"><ScaleSelect value={f.failure_likelihood} scale={LIKELIHOOD} onChange={(v) => set('failure_likelihood', v)} /></F>
+          <F label="Reversibility"><ScaleSelect value={f.reversibility} scale={REVERSIBILITY} onChange={(v) => set('reversibility', v)} /></F>
+          <F label="Risk factor"><input value={f.risk_factor ?? ''} readOnly /></F>
         </div>
         <div className="four">
-          <F label="Severity weight, 1 to 5"><input type="number" min={1} max={5} value={f.severity_weight ?? ''} onChange={(e) => set('severity_weight', num(e.target.value))} /></F>
-          <F label="Reach, 0 to 1"><input type="number" step="0.01" min={0} max={1} value={f.reach ?? ''} onChange={(e) => set('reach', num(e.target.value))} /></F>
-          <F label="Confidence factor, 0 to 1"><input type="number" step="0.05" min={0} max={1} value={f.confidence_factor ?? ''} onChange={(e) => set('confidence_factor', num(e.target.value))} /></F>
-          <F label="Leverage, 1 to 5"><input type="number" min={1} max={5} value={f.leverage ?? ''} onChange={(e) => set('leverage', num(e.target.value))} /></F>
+          <F label="Severity"><ScaleSelect value={f.severity_weight} scale={SEVERITY} onChange={(v) => set('severity_weight', v)} /></F>
+          <F label="Reach"><ScaleSelect value={f.reach} scale={REACH} onChange={(v) => set('reach', v)} /></F>
+          <F label="Confidence factor"><ScaleSelect value={f.confidence_factor} scale={CONF_FACTOR} onChange={(v) => set('confidence_factor', v)} /></F>
+          <F label="Leverage"><ScaleSelect value={f.leverage} scale={LEVERAGE} onChange={(v) => set('leverage', v)} /></F>
         </div>
       </G>
 
@@ -223,12 +340,12 @@ export default function FindingEditor({
         <div className="two">
           <F label="Status">
             <select value={f.status} onChange={(e) => set('status', e.target.value as never)}>
-              {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+              {STATUSES.map((v) => <option key={v} value={v}>{STATUS_LABEL[v]}</option>)}
             </select>
           </F>
           <F label="Verify by"><input type="date" value={f.verify_by ?? ''} onChange={(e) => set('verify_by', e.target.value || null)} /></F>
         </div>
-        <F label="Verification method" required hint="The exact check that proves it is fixed. Written before the fix, not after.">
+        <F label="Verification method" required hint="The exact check that will prove this is fixed. Write it now, before the fix, so it is an honest test rather than one chosen to pass.">
           <textarea value={f.verification_method ?? ''} onChange={(e) => set('verification_method', e.target.value)} />
         </F>
         <div className="two">
@@ -244,6 +361,71 @@ export default function FindingEditor({
   )
 }
 
+/**
+ * One line of plain help for every field, written for someone who has never
+ * built an audit in this shape before. Kept in one map rather than scattered
+ * through the markup so the wording can be reviewed as a whole.
+ */
+const HINT: Record<string, string> = {
+  // identity
+  'Reference': "This finding's permanent ID, like TECH-014. Never reuse or renumber it once it has gone to a client.",
+  'Pillar': 'Which area of the audit this came from, for example Indexation control or Answer eligibility.',
+  'Title, stated as a claim': 'Say what is wrong, not what the topic is. "The staging subdomain is fully indexed", not "Staging".',
+  // scope
+  'URLs affected': 'How many URLs actually have this problem.',
+  'Templates': 'Which page templates are affected. A template-level problem is one fix; a page-level one is many.',
+  'Markets': 'Which locales or country sites are affected. Leave blank if the site is single-market.',
+  // evidence
+  'Measurements': 'Each check you ran, what it returned, and the date. These rows are the proof behind the claim.',
+  'Sources': 'The tools or datasets you used, by name. Screaming Frog, Search Console, server logs.',
+  'Collected from': 'First date your data covers.',
+  'Collected to': 'Last date your data covers. Without a window, nobody can re-verify this later.',
+  'Confidence': 'How strongly the evidence supports the claim.',
+  'Reason, if below high': 'Why it is not high. Fill this in whenever confidence is medium or low.',
+  'Exhibits': 'Screenshots, markup or responses that show the problem in place, so the reader does not have to go looking for it.',
+  // impact
+  'Impact type': 'What kind of harm this causes.',
+  'Metric at risk': 'Which measure moves if this is not fixed. Sessions, clicks, revenue, or none if you cannot honestly name one.',
+  'Quantity': 'The size of the exposure, as a number.',
+  'Unit': 'What that number counts, for example sessions_per_month.',
+  'Time horizon': 'When this starts costing something.',
+  'Affects': 'Who actually feels it.',
+  // remedy
+  'Action': 'The fix in one line, written as an instruction to the owner.',
+  'Steps': 'The fix broken down so an engineer can follow it without asking a follow-up question. One step per line.',
+  'Owner': 'The team that can actually make this change. Name a team, not a person.',
+  'Effort, days': 'Engineering days. This feeds the priority score, so a rough estimate beats leaving it blank.',
+  'Wave': 'Which phase of the roadmap this lands in. Wave 1 is the first block of work.',
+  'Depends on': 'Findings that have to be fixed before this one. Use their references, like TECH-014.',
+  // risk
+  'Blast radius': 'How much breaks if the fix goes wrong. 1 is a single page, 3 is the whole site.',
+  'Failure likelihood': 'How likely the fix is to break something. 1 is a config change, 3 is a rewrite.',
+  'Reversibility': 'How easily it can be undone. 2 is a toggle you can flip back, 0 is permanent.',
+  'Risk factor': 'Calculated from the three fields above. You cannot edit this directly.',
+  // priority
+  'Severity': 'How bad the problem is on its own, before considering how many pages it hits.',
+  'Reach': 'What share of the relevant pages this affects. 1 means all of them.',
+  'Confidence factor': 'Lowers the score when your evidence is thinner. 1 means you are certain.',
+  'Leverage': 'How much other work this unblocks. High leverage means fixing it makes later fixes possible.',
+  // lifecycle
+  'Status': 'Where this stands right now.',
+  'Verify by': 'When to run the check. Usually one crawl cycle after the fix ships.',
+  'Verified on': 'When you actually confirmed it was fixed. Leave blank until then.',
+  'Closed note': "What changed, in the client's own words, so the record still makes sense after staff turnover.",
+  // exhibit fields
+  'URL': 'The page this exhibit came from.',
+  'Selector': 'CSS selector for the element to highlight. This is what lets the screenshot be regenerated later.',
+  'Callout label': 'Short text drawn onto the image itself. Keep it under about 45 characters.',
+  'Extract': 'Paste the source or response exactly as it appeared. Do not tidy it up.',
+  'Request': 'The exact command that produced this, so anyone can repeat it.',
+  'Query': 'The search or prompt that produced this result.',
+  'Surface': 'Which engine or assistant answered, for example google_web.',
+  'Caption': 'What this exhibit proves, in your words. This is the only judged field on an exhibit.',
+  'Captured': 'When you took it. This date is printed on the figure.',
+  'Redacted': 'Whether you masked anything before including it. Say yes if you blurred client data.',
+  'Image': 'PNG or JPEG, up to 10MB.',
+}
+
 function F({
   label, hint, children, lead, required,
 }: {
@@ -255,11 +437,13 @@ function F({
   /** The editor refuses to call the finding complete without these. */
   required?: boolean
 }) {
+  // An explicit hint wins; otherwise fall back to the shared map.
+  const help = hint ?? HINT[label]
   return (
     <div className={`fld${lead ? ' lead' : ''}${required ? ' required' : ''}`}>
       <label>{label}</label>
+      {help && <p className="hint">{help}</p>}
       {children}
-      {hint && <div className="hint">{hint}</div>}
     </div>
   )
 }
@@ -343,7 +527,7 @@ function Exhibits({ finding, onChange }: { finding: FindingFull; onChange: (f: F
           )}
           {e.kind === 'page_element' && (
             <div className="two">
-              <F label="Selector" hint="What makes the image regenerable later.">
+              <F label="Selector">
                 <input value={e.selector ?? ''} onChange={(ev) => patch(e.id, { selector: ev.target.value })} />
               </F>
               <F label="Callout label"><input value={e.label ?? ''} onChange={(ev) => patch(e.id, { label: ev.target.value })} /></F>
@@ -367,7 +551,8 @@ function Exhibits({ finding, onChange }: { finding: FindingFull; onChange: (f: F
             <F label="Captured"><input type="date" value={e.captured ?? ''} onChange={(ev) => patch(e.id, { captured: ev.target.value || null })} /></F>
             <F label="Redacted">
               <select value={e.redacted ? 'yes' : 'no'} onChange={(ev) => patch(e.id, { redacted: ev.target.value === 'yes' })}>
-                <option value="no">no</option><option value="yes">yes</option>
+                <option value="no">No, nothing was masked</option>
+                <option value="yes">Yes, something was masked before including it</option>
               </select>
             </F>
             {(e.kind === 'page_element' || e.kind === 'serp') && (
