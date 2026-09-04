@@ -91,9 +91,6 @@ export default function AuditView() {
 
   if (!audit || !brand) return <div className="wrap"><span className="saving">Loading</span></div>
 
-  const counts = { P1: 0, P2: 0, P3: 0, P4: 0 } as Record<string, number>
-  for (const f of findings) if (f.band) counts[f.band]++
-
   return (
     <>
       <div className="top" style={{ borderTop: '1px solid var(--line)', height: 46 }}>
@@ -103,9 +100,6 @@ export default function AuditView() {
           <b>{audit.title}</b>
         </div>
         <span className="grow" />
-        <span className="saving" style={{ marginRight: 6 }}>
-          {findings.length} findings &nbsp; P1 {counts.P1} &nbsp; P2 {counts.P2} &nbsp; P3 {counts.P3} &nbsp; P4 {counts.P4}
-        </span>
         <button className="btn sm" onClick={exportJson}>JSON</button>
         <button className="btn sm" onClick={exportCsv}>CSV</button>
         <button className="btn sm" onClick={exportPdf}>PDF</button>
