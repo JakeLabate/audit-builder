@@ -12,6 +12,7 @@
 }
 *{box-sizing:border-box}
 html,body,#root{height:100%}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink-2);font-family:var(--body);font-size:14.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
 a{color:var(--teal-d)}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -58,30 +59,13 @@ h1.page{font-family:var(--disp);font-weight:700;font-size:26px;letter-spacing:-.
 .empty{border:1px dashed var(--line-2);border-radius:var(--r);padding:34px;text-align:center;color:var(--muted)}
 .empty b{display:block;font-family:var(--disp);font-size:16px;color:var(--ink);margin-bottom:6px}
 
-/* forms */
-/* Columns: help text of different lengths would otherwise leave the inputs
-   at different heights across a row, so the control is pushed to the bottom
-   and every field in a row lines up. */
-.fld{margin-bottom:15px;min-width:0;display:flex;flex-direction:column}
-.fld>input,.fld>select,.fld>textarea{margin-top:auto}
-.fld label{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
-.fld input,.fld select,.fld textarea{width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);padding:7px 10px;font-size:14px}
-.fld textarea{min-height:70px;resize:vertical;line-height:1.5}
-/* Help sits between the label and the control, so it is read before the field
-   is filled in rather than after. */
-.fld .hint{font-size:12px;color:var(--muted);margin:0 0 9px;line-height:1.45;max-width:62ch}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
-.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
-.four{display:grid;grid-template-columns:repeat(4,1fr);gap:0 12px}
-@media (max-width:760px){.two,.three,.four{grid-template-columns:1fr}}
-
 /* findings layout */
 .split{display:grid;grid-template-columns:minmax(0,330px) minmax(0,1fr);gap:0;height:calc(100vh - 54px)}
 @media (max-width:960px){.split{grid-template-columns:1fr;height:auto}}
 .list{border-right:1px solid var(--line);overflow-y:auto;background:var(--surface)}
 .pane{overflow-y:auto;padding:26px 28px 90px;background:var(--bg)}
 .listbar{position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;z-index:5}
-.listbar input{flex:1;border:1px solid var(--line-2);border-radius:var(--r);padding:6px 9px;font-size:13px}
+.listbar input{flex:1;border:1px solid var(--line-2);border-radius:var(--r);padding:7px 10px;font-size:16px}
 .frow{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:0 10px;align-items:baseline;padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer}
 .frow:hover{background:var(--wash)}
 .frow[aria-selected=true]{background:var(--wash);box-shadow:inset 3px 0 0 var(--teal)}
@@ -123,7 +107,7 @@ h1.page{font-family:var(--disp);font-weight:700;font-size:26px;letter-spacing:-.
 .fld label{display:block;font-family:var(--body);font-size:13.5px;font-weight:600;
   letter-spacing:-.006em;text-transform:none;color:var(--ink);margin-bottom:3px}
 .fld input,.fld select,.fld textarea{width:100%;background:var(--surface);
-  border:1px solid var(--line-2);border-radius:var(--r);padding:8px 11px;font-size:14px;
+  border:1px solid var(--line-2);border-radius:var(--r);padding:8px 11px;font-size:16px;
   color:var(--ink)}
 .fld input:hover,.fld select:hover,.fld textarea:hover{border-color:var(--muted)}
 .fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--teal);
@@ -196,3 +180,25 @@ h1.page{font-family:var(--disp);font-weight:700;font-size:26px;letter-spacing:-.
 .login p{color:var(--muted);margin:0 0 26px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:var(--r);font-size:13.5px;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.25)}
 .saving{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--label)}
+
+/* ---------- no auto zoom on focus, anywhere ----------
+   Every WebKit-based browser on iOS, which is all of them including Chrome
+   and Firefox, zooms the page when a focused control has a font size under
+   16px, and never zooms back out. This is set unconditionally rather than
+   behind a pointer or width query, because pointer detection is unreliable
+   across browsers and desktop-mode requests, and a form that is readable on
+   a phone is not worse on a desktop.
+
+   Deliberately NOT solved with user-scalable=no on the viewport: that
+   disables pinch zoom for people who need to magnify, and modern iOS ignores
+   it anyway, so it costs accessibility and fixes nothing. */
+input, select, textarea { font-size: 16px }
+
+/* Larger hit areas once fingers are involved. */
+@media (pointer: coarse) {
+  .fld input, .fld select, .fld textarea { padding: 10px 12px }
+  .btn { padding: 10px 15px }
+  .btn.sm { padding: 7px 12px }
+  .frow { padding: 14px 12px }
+  .chip button { padding: 4px 7px }
+}
