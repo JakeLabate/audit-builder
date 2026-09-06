@@ -178,7 +178,14 @@ h1.page{font-family:var(--disp);font-weight:700;font-size:26px;letter-spacing:-.
 .login{max-width:400px;width:100%;text-align:center}
 .login h1{font-family:var(--disp);font-weight:700;font-size:30px;letter-spacing:-.025em;color:var(--ink);margin:0 0 8px}
 .login p{color:var(--muted);margin:0 0 26px}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:var(--r);font-size:13.5px;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;
+  padding:11px 12px 11px 18px;border-radius:var(--r);font-size:13.5px;z-index:60;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);display:flex;align-items:center;gap:14px;
+  max-width:min(560px,92vw)}
+.toast a{color:#fff;font-weight:600;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
+.toast button{background:none;border:0;color:#fff;opacity:.6;cursor:pointer;font-size:18px;
+  line-height:1;padding:0 6px}
+.toast button:hover{opacity:1}
 .saving{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--label)}
 
 /* ---------- no auto zoom on focus, anywhere ----------
