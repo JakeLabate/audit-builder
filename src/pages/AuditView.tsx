@@ -18,7 +18,7 @@ export default function AuditView() {
   const [findings, setFindings] = useState<FindingFull[]>([])
   const [sel, setSel] = useState<string | null>(null)
   const [q, setQ] = useState('')
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ msg: string; url?: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -36,7 +36,12 @@ export default function AuditView() {
     })()
   }, [auditId])
 
-  const say = (m: string) => { setToast(m); setTimeout(() => setToast(null), 3200) }
+  // A toast carrying a link stays up long enough to be clicked, and is
+  // dismissible, because the link is sometimes the only way to reach the result.
+  const say = (msg: string, url?: string) => {
+    setToast({ msg, url })
+    setTimeout(() => setToast(null), url ? 20000 : 3200)
+  }
 
   const shown = useMemo(() => {
     const s = q.toLowerCase()
@@ -78,11 +83,21 @@ export default function AuditView() {
   async function exportSheets() {
     if (!brand || !audit) return
     setBusy(true)
+    // Open the tab synchronously, while the click is still the active user
+    // gesture. Opening it after the await gets silently blocked, because by
+    // then the browser no longer connects the call to the click.
+    const tab = window.open('', '_blank')
     try {
       const url = await exportToSheets(brand, audit, findings)
-      window.open(url, '_blank')
-      say('Sheet created in your Drive.')
+      if (tab && !tab.closed) {
+        tab.location.href = url
+        say('Sheet created in your Drive.')
+      } else {
+        // Blocked or closed. Hand over a link instead of losing the sheet.
+        say('Sheet created in your Drive.', url)
+      }
     } catch (e) {
+      if (tab && !tab.closed) tab.close()
       say((e as Error).message)
     } finally {
       setBusy(false)
@@ -152,7 +167,15 @@ export default function AuditView() {
         </div>
       </div>
 
-      {toast && <div className="toast">{toast}</div>}
+      {toast && (
+        <div className="toast">
+          <span>{toast.msg}</span>
+          {toast.url && (
+            <a href={toast.url} target="_blank" rel="noopener noreferrer">Open it</a>
+          )}
+          <button onClick={() => setToast(null)} aria-label="Dismiss">&times;</button>
+        </div>
+      )}
       <AuditMeta audit={audit} onChange={setAudit} />
     </>
   )
