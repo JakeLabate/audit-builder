@@ -88,7 +88,10 @@ export default function AuditView() {
     // then the browser no longer connects the call to the click.
     const tab = window.open('', '_blank')
     try {
-      const url = await exportToSheets(brand, audit, findings)
+      const { data } = await supabase.auth.getUser()
+      const byline =
+        (data.user?.user_metadata as { full_name?: string })?.full_name ?? data.user?.email ?? ''
+      const url = await exportToSheets(brand, audit, findings, byline)
       if (tab && !tab.closed) {
         tab.location.href = url
         say('Sheet created in your Drive.')
