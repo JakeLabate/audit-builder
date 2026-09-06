@@ -108,6 +108,11 @@ export async function exportToSheets(
   })
 
   const id: string = created.spreadsheetId
+  // Google assigns the sheet id when the spreadsheet is created; it is not 0
+  // whenever the sheet is given a name up front. Read it back rather than
+  // assuming, or the formatting call fails with "No grid with id: 0".
+  const sheetId: number = created.sheets?.[0]?.properties?.sheetId ?? 0
+
   const values = [CSV_COLUMNS as unknown as string[], ...findings.map((f) => toRow(f).map(cell))]
 
   await api(
@@ -116,28 +121,33 @@ export async function exportToSheets(
     { method: 'PUT', body: JSON.stringify({ values }) },
   )
 
-  // Bold the header and size the first columns so it opens readable.
-  await api(token, `https://sheets.googleapis.com/v4/spreadsheets/${id}:batchUpdate`, {
-    method: 'POST',
-    body: JSON.stringify({
-      requests: [
-        {
-          repeatCell: {
-            range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1 },
-            cell: { userEnteredFormat: { textFormat: { bold: true } } },
-            fields: 'userEnteredFormat.textFormat.bold',
+  // Formatting is cosmetic. If it fails the sheet is still complete and usable,
+  // so never let it throw away a spreadsheet that was written successfully.
+  try {
+    await api(token, `https://sheets.googleapis.com/v4/spreadsheets/${id}:batchUpdate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        requests: [
+          {
+            repeatCell: {
+              range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
+              cell: { userEnteredFormat: { textFormat: { bold: true } } },
+              fields: 'userEnteredFormat.textFormat.bold',
+            },
           },
-        },
-        {
-          updateDimensionProperties: {
-            range: { sheetId: 0, dimension: 'COLUMNS', startIndex: 0, endIndex: 2 },
-            properties: { pixelSize: 240 },
-            fields: 'pixelSize',
+          {
+            updateDimensionProperties: {
+              range: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 2 },
+              properties: { pixelSize: 240 },
+              fields: 'pixelSize',
+            },
           },
-        },
-      ],
-    }),
-  })
+        ],
+      }),
+    })
+  } catch {
+    // ignore: the data is already in the sheet
+  }
 
   return created.spreadsheetUrl ?? `https://docs.google.com/spreadsheets/d/${id}`
 }
