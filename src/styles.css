@@ -173,6 +173,71 @@ h1.page{font-family:var(--disp);font-weight:700;font-size:26px;letter-spacing:-.
 .chip button{border:0;background:none;cursor:pointer;color:var(--muted);font-family:var(--mono);padding:0 3px}
 .chip button:hover{color:var(--crim)}
 
+/* ---------- lifecycle ----------
+   One colour per stage, used for the dot in the list, the chip in the
+   summary and the lit step in the strip. Decision stages share a family:
+   accepted leans teal, deferred amber, rejected crimson. */
+.stg-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;
+  vertical-align:1px;background:var(--line-2)}
+.stg-dot.delivered{background:var(--violet)}
+.stg-dot.accepted{background:var(--teal)}
+.stg-dot.deferred{background:var(--amber)}
+.stg-dot.rejected{background:var(--crim)}
+.stg-dot.implemented{background:var(--teal-d)}
+.stg-dot.verified{background:var(--ink)}
+.stg-dot.measured{background:var(--ink)}
+.stg-dot.internal{background:var(--muted)}
+
+.stagesum{display:flex;flex-wrap:wrap;gap:5px;padding:8px 12px;border-bottom:1px solid var(--line);
+  background:var(--surface)}
+.stg-chip{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--line);
+  border-radius:var(--r);background:var(--wash);padding:2px 7px;font-size:11.5px;color:var(--ink-2);cursor:pointer}
+.stg-chip b{font-family:var(--mono);font-weight:500;font-size:10.5px;color:var(--ink);margin-left:2px}
+.stg-chip:hover{border-color:var(--line-2)}
+.stg-chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.stg-chip.on b{color:#fff}
+
+.stagestrip{display:flex;flex-wrap:wrap;align-items:center;gap:0;margin:-8px 0 26px;max-width:860px}
+.stagestrip .stg{font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
+  padding:4px 9px;border:1px solid var(--line);border-left:0;color:var(--muted);background:var(--surface)}
+.stagestrip .stg:first-child{border-left:1px solid var(--line)}
+.stagestrip .stg.done{color:var(--ink-2);background:var(--wash)}
+.stagestrip .stg.now{color:#fff;background:var(--ink);border-color:var(--ink);font-weight:500}
+.stagestrip .stg.now.accepted,.stagestrip .stg.now.implemented{background:var(--teal-d);border-color:var(--teal-d)}
+.stagestrip .stg.now.deferred{background:var(--amber);border-color:var(--amber)}
+.stagestrip .stg.now.rejected{background:var(--crim);border-color:var(--crim)}
+.stagestrip .stg.now.delivered{background:var(--violet);border-color:var(--violet)}
+.stagestrip .hint{flex-basis:100%;margin:8px 0 0}
+
+.check{border:1px solid var(--line);border-radius:var(--r);padding:9px 10px 3px;margin-bottom:8px;background:var(--surface)}
+.check .ch{display:grid;grid-template-columns:minmax(0,220px) minmax(0,1fr) auto;gap:6px;margin-bottom:6px}
+.check .ch.two{grid-template-columns:1fr 1fr}
+.check .ch input,.check .ch select{width:100%;border:1px solid var(--line-2);border-radius:var(--r);padding:6px 9px;
+  font-size:16px;background:var(--surface);color:var(--ink)}
+@media (max-width:760px){.check .ch{grid-template-columns:1fr}.check .ch.two{grid-template-columns:1fr}}
+
+.lastcheck{border-left:3px solid var(--line-2);background:var(--wash);padding:10px 14px;margin:0 0 16px;font-size:13px}
+.lastcheck.pass{border-color:var(--teal)}
+.lastcheck.fail{border-color:var(--crim)}
+.lastcheck>b{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;margin-right:10px}
+.lastcheck.pass>b{color:var(--teal-d)} .lastcheck.fail>b{color:var(--crim)}
+.lastcheck>span{color:var(--muted);font-size:12px}
+.lastcheck>em{display:block;color:var(--crim);font-style:normal;margin-top:4px}
+.lastcheck .co{display:flex;gap:10px;flex-wrap:wrap;padding:5px 0;border-top:1px solid var(--line);margin-top:6px;color:var(--ink-2)}
+.lastcheck .co .mono{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--crim);min-width:34px}
+.lastcheck .co.ok .mono{color:var(--teal-d)}
+
+.hist{border-top:1px solid var(--line);padding-top:12px}
+.hrow{display:grid;grid-template-columns:150px 120px minmax(0,1fr);gap:12px;padding:6px 0;
+  border-bottom:1px solid var(--line);font-size:13px;align-items:baseline}
+.hrow .when{font-size:11px;color:var(--muted)}
+.hrow .who{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hrow .who.client{color:var(--teal-d)} .hrow .who.checker{color:var(--violet)}
+.hrow .what b{font-weight:600;color:var(--ink);margin-right:6px}
+.hrow .arr{color:var(--muted);margin:0 4px}
+@media (max-width:760px){.hrow{grid-template-columns:1fr}}
+
 .mono{font-family:var(--mono);font-size:12.5px}
 .center{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
 .login{max-width:400px;width:100%;text-align:center}

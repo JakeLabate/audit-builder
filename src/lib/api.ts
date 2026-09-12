@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Audit, Brand, Example, Finding, FindingFull, Org } from './types'
+import type { Audit, Brand, Example, Finding, FindingFull, FindingHistory, Org } from './types'
 import { band, riskFactor, score } from './score'
 
 /** RLS does the filtering, so no query here passes an org id as a filter. */
@@ -125,6 +125,30 @@ export async function updateFinding(id: string, patch: Partial<Finding>): Promis
 export async function deleteFinding(id: string): Promise<void> {
   const { error } = await supabase.from('findings').delete().eq('id', id)
   if (error) throw error
+}
+
+/** Re-read one finding. Used after a client decision or a checker run may
+ *  have changed it underneath the editor. */
+export async function getFinding(id: string): Promise<FindingFull | null> {
+  const { data, error } = await supabase
+    .from('findings')
+    .select('*, examples(*)')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return data ? decorate(data) : null
+}
+
+/** Append-only change log, newest first. Written by a database trigger. */
+export async function listHistory(findingId: string, limit = 60): Promise<FindingHistory[]> {
+  const { data, error } = await supabase
+    .from('finding_history')
+    .select('id, finding_id, at, actor, field, old_value, new_value')
+    .eq('finding_id', findingId)
+    .order('id', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return data ?? []
 }
 
 export async function createExample(

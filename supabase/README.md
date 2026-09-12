@@ -1,7 +1,7 @@
 # Database
 
 The schema lives in the Supabase project `auditbuilder` (`vvekkbboqqkxnlpmxazh`).
-Five migrations are applied, in order:
+Seven migrations are applied, in order (the SQL for the newest lives in `supabase/migrations/`):
 
 | Version | Name | What it does |
 |---|---|---|
@@ -10,6 +10,8 @@ Five migrations are applied, in order:
 | 20260904202644 | `harden_functions` | Moves every SECURITY DEFINER helper into a `private` schema so PostgREST cannot expose them as RPC |
 | 20260904202748 | `allow_account_deletion` | Drops `on delete restrict` on the org creator; sweeps orgs whose last member left |
 | 20260904204155 | `evidence_storage` | Private `evidence` bucket with per-tenant storage policies |
+| 20260912000000 | `finding_lifecycle` | Post-delivery columns on `findings` (exposure, client decision, acceptance_checks, last check, outcome), append-only `finding_history` with trigger, `private.record_check` for the verifier, `finding_lifecycle` view with a derived `stage` |
+| 20260912000200 | `verifier_api` | `verifier_queue` and `verifier_record`, service-role only, the verifier worker's whole database surface (see `verifier/`) |
 
 ## Pull them into this repo
 

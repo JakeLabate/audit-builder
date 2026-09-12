@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AffectedParty, Example, FindingFull, Measurement } from '../lib/types'
+import type {
+  AcceptanceCheck, AffectedParty, AuditStatus, CheckKind, Example, FindingFull, FindingHistory, Measurement,
+} from '../lib/types'
 import { BAND_LABEL, missingRequirements, riskFactor, score, band } from '../lib/score'
-import { createExample, deleteExample, deleteFinding, updateExample, updateFinding, uploadEvidence, evidenceUrl } from '../lib/api'
+import {
+  createExample, deleteExample, deleteFinding, listHistory, updateExample, updateFinding, uploadEvidence, evidenceUrl,
+} from '../lib/api'
+import {
+  CHECK_KINDS, CHECK_LABEL, CHECK_SHAPE, STAGE_HELP, STAGE_LABEL, STAGE_ORDER, checksFromExhibits, stage as stageOf,
+} from '../lib/lifecycle'
 
 /** Debounced autosave. Editing forty fields with a Save button is a bad trade. */
 function useAutosave(id: string, patch: Record<string, unknown>, enabled: boolean) {
@@ -137,14 +144,22 @@ const PARTIES: AffectedParty[] = ['end_users','crawlers','internal_team']
 const STATUSES = ['open','in_progress','fixed','verified','reopened','accepted_risk'] as const
 const KINDS = ['page_element','markup','response','serp'] as const
 
+const DECISION_LABEL: Record<string, string> = {
+  accepted: 'Accepted · the client said yes',
+  deferred: 'Deferred · parked for later',
+  rejected: 'Rejected · the client said no',
+}
+
 export default function FindingEditor({
-  finding, onChange, onDeleted,
+  finding, auditStatus, onChange, onDeleted,
 }: {
   finding: FindingFull
+  auditStatus: AuditStatus
   onChange: (f: FindingFull) => void
   onDeleted: () => void
 }) {
   const f = finding
+  const stage = stageOf(f, auditStatus)
   const set = <K extends keyof FindingFull>(k: K, v: FindingFull[K]) => {
     const next = { ...f, [k]: v }
     next.score = score(next)
@@ -167,6 +182,10 @@ export default function FindingEditor({
     severity_weight: f.severity_weight, reach: f.reach, confidence_factor: f.confidence_factor, leverage: f.leverage,
     status: f.status, verification_method: f.verification_method,
     verify_by: f.verify_by, verified_on: f.verified_on, closed_note: f.closed_note,
+    exposure: f.exposure, decision: f.decision, decision_note: f.decision_note,
+    acceptance_checks: f.acceptance_checks, implemented_on: f.implemented_on,
+    outcome_note: f.outcome_note, outcome_value: f.outcome_value,
+    outcome_unit: f.outcome_unit, outcome_measured_on: f.outcome_measured_on,
   }
   const saveState = useAutosave(f.id, savePatch, true)
   const issues = missingRequirements(f)
@@ -181,6 +200,9 @@ export default function FindingEditor({
         <span className="saving">{saveState === 'saving' ? 'saving' : saveState === 'error' ? 'save failed' : 'saved'}</span>
       </div>
       <div className="idline">{f.ref} &nbsp;·&nbsp; {f.status.replace('_', ' ')}</div>
+
+      <StageStrip stage={stage} />
+
 
       <div className="scorebox">
         <div className="big">
@@ -336,28 +358,227 @@ export default function FindingEditor({
         </div>
       </G>
 
-      <G name="Lifecycle" purpose="What happens after delivery. This is the part that keeps the register useful six months later.">
+      <G name="Handover" purpose="Whether the client ever sees this. Everything below only matters for findings that are handed over.">
+        <F label="Exposure">
+          <select value={f.exposure} onChange={(e) => set('exposure', e.target.value as never)}>
+            <option value="client">Client · shown in the portal once the audit is delivered</option>
+            <option value="internal">Internal · never shown, never counted as ignored</option>
+          </select>
+        </F>
+      </G>
+
+      <G name="Client decision" purpose="What the client decided. Normally they set this themselves in the portal; you can set it here on their behalf after a call or an email.">
+        <div className="two">
+          <F label="Decision">
+            <select value={f.decision ?? ''} onChange={(e) => set('decision', (e.target.value || null) as never)}>
+              <option value="">Not decided</option>
+              {(['accepted', 'deferred', 'rejected'] as const).map((v) => (
+                <option key={v} value={v}>{DECISION_LABEL[v]}</option>
+              ))}
+            </select>
+          </F>
+          <F label="Decided">
+            <input readOnly value={
+              f.decided_at
+                ? `${f.decided_by ?? 'unknown'} · ${new Date(f.decided_at).toLocaleDateString()}`
+                : 'Not yet'
+            } />
+          </F>
+        </div>
+        <F label="Decision note">
+          <textarea value={f.decision_note ?? ''} onChange={(e) => set('decision_note', e.target.value || null)} />
+        </F>
+      </G>
+
+      <G name="Implementation" purpose="Where the fix stands. Status is what you or the client report; the checker below is what proves it.">
         <div className="two">
           <F label="Status">
             <select value={f.status} onChange={(e) => set('status', e.target.value as never)}>
               {STATUSES.map((v) => <option key={v} value={v}>{STATUS_LABEL[v]}</option>)}
             </select>
           </F>
-          <F label="Verify by"><input type="date" value={f.verify_by ?? ''} onChange={(e) => set('verify_by', e.target.value || null)} /></F>
+          <F label="Reported live on">
+            <input type="date" value={f.implemented_on ?? ''} onChange={(e) => set('implemented_on', e.target.value || null)} />
+          </F>
         </div>
-        <F label="Verification method" required hint="The exact check that will prove this is fixed. Write it now, before the fix, so it is an honest test rather than one chosen to pass.">
-          <textarea value={f.verification_method ?? ''} onChange={(e) => set('verification_method', e.target.value)} />
-        </F>
         <div className="two">
-          <F label="Verified on"><input type="date" value={f.verified_on ?? ''} onChange={(e) => set('verified_on', e.target.value || null)} /></F>
+          <F label="Verify by"><input type="date" value={f.verify_by ?? ''} onChange={(e) => set('verify_by', e.target.value || null)} /></F>
           <F label="Closed note"><input value={f.closed_note ?? ''} onChange={(e) => set('closed_note', e.target.value)} /></F>
         </div>
       </G>
+
+      <G name="Verification" purpose="The checks that prove this is fixed. Write them now, before the fix, so they are an honest test. The checker runs them on a schedule and flips the finding to verified when every one passes.">
+        <F label="Verification method" required hint="The check in words, for the reader. The rows below are the same check in a form a machine can run.">
+          <textarea value={f.verification_method ?? ''} onChange={(e) => set('verification_method', e.target.value)} />
+        </F>
+        <Checks finding={f} onChange={(v) => set('acceptance_checks', v)} />
+        <LastCheck finding={f} />
+        <F label="Verified on">
+          <input type="date" value={f.verified_on ?? ''} onChange={(e) => set('verified_on', e.target.value || null)} />
+        </F>
+      </G>
+
+      <G name="Outcome" purpose="What actually happened after the fix. One number, its unit, and when you measured it. This is what the renewal conversation is built on.">
+        <div className="three">
+          <F label="Outcome value">
+            <input type="number" value={f.outcome_value ?? ''} onChange={(e) => set('outcome_value', num(e.target.value))} />
+          </F>
+          <F label="Unit">
+            <input value={f.outcome_unit ?? ''} onChange={(e) => set('outcome_unit', e.target.value || null)} placeholder={f.quantity_unit ?? 'sessions_per_month'} />
+          </F>
+          <F label="Measured on">
+            <input type="date" value={f.outcome_measured_on ?? ''} onChange={(e) => set('outcome_measured_on', e.target.value || null)} />
+          </F>
+        </div>
+        <F label="Outcome note">
+          <textarea value={f.outcome_note ?? ''} onChange={(e) => set('outcome_note', e.target.value || null)} />
+        </F>
+      </G>
+
+      <History findingId={f.id} version={f.updated_at} />
 
       <button className="btn danger" onClick={async () => {
         if (confirm(`Delete ${f.ref}?`)) { await deleteFinding(f.id); onDeleted() }
       }}>Delete finding</button>
     </div>
+  )
+}
+
+/** The lifecycle as a strip. Every stage is shown; the current one is lit. */
+function StageStrip({ stage }: { stage: ReturnType<typeof stageOf> }) {
+  // Decision stages are alternatives, so only the one that applies is shown.
+  const shown = STAGE_ORDER.filter((s) => {
+    if (s === 'internal') return stage === 'internal'
+    if (s === 'deferred' || s === 'rejected') return stage === s
+    if (s === 'accepted') return !['deferred', 'rejected'].includes(stage)
+    return true
+  })
+  const idx = shown.indexOf(stage)
+  return (
+    <div className="stagestrip" title={STAGE_HELP[stage]}>
+      {shown.map((s, i) => (
+        <span key={s} className={`stg${i < idx ? ' done' : ''}${s === stage ? ` now ${s}` : ''}`}>
+          {STAGE_LABEL[s]}
+        </span>
+      ))}
+      <p className="hint">{STAGE_HELP[stage]}</p>
+    </div>
+  )
+}
+
+function Checks({ finding, onChange }: { finding: FindingFull; onChange: (v: AcceptanceCheck[]) => void }) {
+  const value = finding.acceptance_checks ?? []
+  const edit = (i: number, p: Partial<AcceptanceCheck>) =>
+    onChange(value.map((c, j) => (j === i ? { ...c, ...p } : c)))
+  const firstUrl = finding.examples.find((e) => e.url)?.url ?? ''
+  return (
+    <div className="fld">
+      <label>Acceptance checks {value.length ? value.length : ''}</label>
+      <p className="hint">All of these have to pass. Each one is a single fact about a single URL that the checker can fetch and test.</p>
+      {value.map((c, i) => {
+        const shape = CHECK_SHAPE[c.kind]
+        return (
+          <div key={i} className="check">
+            <div className="ch">
+              <select value={c.kind} onChange={(e) => edit(i, { kind: e.target.value as CheckKind })}>
+                {CHECK_KINDS.map((k) => <option key={k} value={k}>{CHECK_LABEL[k]}</option>)}
+              </select>
+              <input value={c.url} placeholder="https://" onChange={(e) => edit(i, { url: e.target.value })} />
+              <button className="btn sm danger" onClick={() => onChange(value.filter((_, j) => j !== i))}>x</button>
+            </div>
+            {(shape.selector || shape.expected) && (
+              <div className="ch two">
+                {shape.selector && (
+                  <input className="mono" value={c.selector ?? ''} placeholder={shape.selector}
+                    onChange={(e) => edit(i, { selector: e.target.value })} />
+                )}
+                {shape.expected && (
+                  <input className="mono" value={c.expected ?? ''} placeholder={shape.expected}
+                    onChange={(e) => edit(i, { expected: e.target.value })} />
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button className="btn sm" onClick={() => onChange([...value, { kind: 'http_status', url: firstUrl, expected: '200' }])}>
+          Add check
+        </button>
+        {finding.examples.length > 0 && (
+          <button className="btn sm" onClick={() => onChange([...value, ...checksFromExhibits(finding.examples)])}
+            title="One check per exhibit: page elements should be gone, fetched URLs should return 200">
+            Seed from exhibits
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function LastCheck({ finding }: { finding: FindingFull }) {
+  const r = finding.last_check_result
+  if (!finding.last_check_at || !r) {
+    return <p className="hint" style={{ marginTop: -6 }}>The checker has not run against this finding yet.</p>
+  }
+  return (
+    <div className={`lastcheck${r.pass ? ' pass' : ' fail'}`}>
+      <b>{r.pass ? 'Passing' : 'Failing'}</b>
+      <span>checked {new Date(finding.last_check_at).toLocaleString()}</span>
+      {r.error && <em>{r.error}</em>}
+      {r.checks?.map((c, i) => (
+        <div key={i} className={`co${c.pass ? ' ok' : ''}`}>
+          <span className="mono">{c.pass ? 'pass' : 'fail'}</span>
+          <span>{CHECK_LABEL[c.kind]} · {c.url}</span>
+          {!c.pass && <span className="mono">saw {c.observed ?? 'nothing'}{c.expected ? `, wanted ${c.expected}` : ''}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Append-only change log. Re-fetched whenever the row's updated_at moves. */
+function History({ findingId, version }: { findingId: string; version: string }) {
+  const [rows, setRows] = useState<FindingHistory[] | null>(null)
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    let live = true
+    listHistory(findingId).then((r) => { if (live) setRows(r) }).catch(() => { if (live) setRows([]) })
+    return () => { live = false }
+  }, [findingId, version, open])
+
+  const show = (v: unknown) => {
+    if (v == null) return 'nothing'
+    if (typeof v === 'string') return v
+    if (Array.isArray(v)) return `${v.length} item${v.length === 1 ? '' : 's'}`
+    return JSON.stringify(v)
+  }
+
+  return (
+    <section className="grp">
+      <h4>History</h4>
+      <p className="purpose">Every tracked change, who made it, and when. The audit-day record is always recoverable from here.</p>
+      {!open ? (
+        <button className="btn sm" onClick={() => setOpen(true)}>Show history</button>
+      ) : rows == null ? (
+        <span className="saving">Loading</span>
+      ) : rows.length === 0 ? (
+        <p className="hint">No changes recorded since delivery tracking was switched on.</p>
+      ) : (
+        <div className="hist">
+          {rows.map((h) => (
+            <div key={h.id} className="hrow">
+              <span className="mono when">{new Date(h.at).toLocaleString()}</span>
+              <span className={`who ${h.actor.split(':')[0]}`}>{h.actor}</span>
+              <span className="what">
+                <b>{h.field.replace(/_/g, ' ')}</b> {show(h.old_value)} <span className="arr">to</span> {show(h.new_value)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -412,6 +633,15 @@ const HINT: Record<string, string> = {
   'Verify by': 'When to run the check. Usually one crawl cycle after the fix ships.',
   'Verified on': 'When you actually confirmed it was fixed. Leave blank until then.',
   'Closed note': "What changed, in the client's own words, so the record still makes sense after staff turnover.",
+  // after delivery
+  'Exposure': 'Client findings appear in the portal once the audit is delivered. Internal ones are for you and never count against the client.',
+  'Decision': 'Accepted, deferred or rejected. Deferred is the upsell list; rejected stays on the record with their reason.',
+  'Decided': 'Who made the call and when. Set automatically.',
+  'Decision note': "The client's reason, in their words, if they gave one.",
+  'Reported live on': 'The date the client or their team said the fix shipped. The checker decides whether it is actually verified.',
+  'Outcome value': 'The number that moved. Compare it with the quantity you put at risk under Impact.',
+  'Measured on': 'When you took the measurement. Leave blank until you have.',
+  'Outcome note': 'How you measured it and what else was going on at the time, so the number can be trusted later.',
   // exhibit fields
   'URL': 'The page this exhibit came from.',
   'Selector': 'CSS selector for the element to highlight. This is what lets the screenshot be regenerated later.',

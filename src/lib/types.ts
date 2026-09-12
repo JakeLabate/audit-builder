@@ -18,6 +18,59 @@ export type PriorityBand = 'P1' | 'P2' | 'P3' | 'P4'
 export type ExampleKind = 'page_element' | 'markup' | 'response' | 'serp'
 export type AuditStatus = 'draft' | 'in_review' | 'delivered' | 'archived'
 
+/** Whether the client ever sees this finding. Internal ones are never counted
+ *  as ignored recommendations. */
+export type Exposure = 'client' | 'internal'
+/** The client's call on a recommendation. Written from the portal or by the owner. */
+export type Decision = 'accepted' | 'deferred' | 'rejected'
+
+/** A machine-checkable condition the verifier runs. All must pass. */
+export type CheckKind =
+  | 'http_status' | 'redirect_to' | 'header' | 'canonical'
+  | 'selector_present' | 'selector_absent' | 'selector_text'
+  | 'json_ld_type' | 'robots_allows' | 'robots_disallows'
+
+export interface AcceptanceCheck {
+  kind: CheckKind
+  url: string
+  /** CSS selector, or the header name for kind=header. */
+  selector?: string
+  /** Expected value: a status code, a URL, a substring, a @type, or a user agent. */
+  expected?: string
+  note?: string
+}
+
+export interface CheckOutcome {
+  kind: CheckKind
+  url: string
+  pass: boolean
+  observed: string | null
+  expected: string | null
+}
+
+export interface CheckResult {
+  pass: boolean
+  checks: CheckOutcome[]
+  error?: string
+}
+
+/** One tracked field change. actor is owner | client:<name> | checker. */
+export interface FindingHistory {
+  id: number
+  finding_id: string
+  at: string
+  actor: string
+  field: string
+  old_value: unknown
+  new_value: unknown
+}
+
+/** Where a finding sits after delivery. Derived, never stored. */
+export type Stage =
+  | 'drafted' | 'internal' | 'delivered'
+  | 'accepted' | 'deferred' | 'rejected'
+  | 'implemented' | 'verified' | 'measured'
+
 export interface Profile {
   id: string
   email: string | null
@@ -117,6 +170,21 @@ export interface Finding {
   verify_by: string | null
   verified_on: string | null
   closed_note: string | null
+
+  // after delivery
+  exposure: Exposure
+  decision: Decision | null
+  decided_at: string | null
+  decided_by: string | null
+  decision_note: string | null
+  acceptance_checks: AcceptanceCheck[]
+  last_check_at: string | null
+  last_check_result: CheckResult | null
+  implemented_on: string | null
+  outcome_note: string | null
+  outcome_value: number | null
+  outcome_unit: string | null
+  outcome_measured_on: string | null
 
   position: number
   created_at: string

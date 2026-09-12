@@ -1,0 +1,16 @@
+name = "audit-verifier"
+main = "src/index.ts"
+compatibility_date = "2026-09-04"
+
+# Every six hours. Findings are picked oldest-checked first, so a large
+# backlog drains over a few runs rather than hammering one site.
+[triggers]
+crons = ["17 */6 * * *"]
+
+[vars]
+BATCH = "40"
+
+# Secrets, set once with `wrangler secret put <NAME>`:
+#   SUPABASE_URL                  https://vvekkbboqqkxnlpmxazh.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY     from Supabase > Project settings > API
+#   VERIFIER_KEY                  any long random string; the manual trigger uses it

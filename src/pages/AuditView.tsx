@@ -5,6 +5,7 @@ import {
 } from '../lib/api'
 import type { Audit, Brand, FindingFull } from '../lib/types'
 import FindingEditor from '../components/FindingEditor'
+import { STAGE_LABEL, stage } from '../lib/lifecycle'
 import { download, slug, toCsv, toDocument } from '../export/serialize'
 import { buildPrintDocument, printDocument } from '../export/pdf'
 import { PRINT_CSS } from '../export/print.css'
@@ -43,13 +44,27 @@ export default function AuditView() {
     setTimeout(() => setToast(null), url ? 20000 : 3200)
   }
 
+  const [stageFilter, setStageFilter] = useState<string | null>(null)
+
   const shown = useMemo(() => {
     const s = q.toLowerCase()
-    const list = s
+    let list = s
       ? findings.filter((f) => f.title.toLowerCase().includes(s) || f.ref.toLowerCase().includes(s))
       : findings
+    if (stageFilter && audit) list = list.filter((f) => stage(f, audit.status) === stageFilter)
     return [...list].sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
-  }, [findings, q])
+  }, [findings, q, stageFilter, audit])
+
+  // Where the audit stands after delivery, as counts. Clicking one filters.
+  const stageCounts = useMemo(() => {
+    if (!audit) return []
+    const m = new Map<string, number>()
+    for (const f of findings) {
+      const s = stage(f, audit.status)
+      m.set(s, (m.get(s) ?? 0) + 1)
+    }
+    return [...m.entries()]
+  }, [findings, audit])
 
   const current = findings.find((f) => f.id === sel) ?? null
 
@@ -133,6 +148,16 @@ export default function AuditView() {
             <input placeholder="Filter findings" value={q} onChange={(e) => setQ(e.target.value)} />
             <button className="btn sm pri" onClick={add}>New</button>
           </div>
+          {audit.status === 'delivered' && stageCounts.length > 0 && (
+            <div className="stagesum">
+              {stageCounts.map(([s, n]) => (
+                <button key={s} className={`stg-chip${stageFilter === s ? ' on' : ''}`}
+                  onClick={() => setStageFilter(stageFilter === s ? null : s)}>
+                  <i className={`stg-dot ${s}`} />{STAGE_LABEL[s as keyof typeof STAGE_LABEL]} <b>{n}</b>
+                </button>
+              ))}
+            </div>
+          )}
           {shown.length === 0 ? (
             <div style={{ padding: 24, color: 'var(--muted)', fontSize: 13.5 }}>
               No findings yet. Every finding is the same forty fields, so start one and fill what you know.
@@ -143,7 +168,10 @@ export default function AuditView() {
                 <span className="ref">{f.ref}</span>
                 <span className="nm">
                   {f.title || <em style={{ color: 'var(--muted)' }}>Untitled</em>}
-                  <span>{f.owner ?? 'no owner'} &nbsp;·&nbsp; {f.examples.length} exhibits</span>
+                  <span>
+                    <i className={`stg-dot ${stage(f, audit.status)}`} />{STAGE_LABEL[stage(f, audit.status)]}
+                    &nbsp;·&nbsp; {f.owner ?? 'no owner'} &nbsp;·&nbsp; {f.examples.length} exhibits
+                  </span>
                 </span>
                 <span className={`pill ${f.band ?? 'none'}`}>{f.band ?? '--'}</span>
               </div>
@@ -155,6 +183,7 @@ export default function AuditView() {
           {current ? (
             <FindingEditor
               finding={current}
+              auditStatus={audit.status}
               onChange={(f) => setFindings((p) => p.map((x) => (x.id === f.id ? f : x)))}
               onDeleted={() => {
                 setFindings((p) => p.filter((x) => x.id !== current.id))
