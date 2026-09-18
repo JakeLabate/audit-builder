@@ -5,12 +5,38 @@ import {
 } from '../lib/api'
 import type { Audit, Brand, FindingFull } from '../lib/types'
 import FindingEditor from '../components/FindingEditor'
+import LogicEditor from '../components/LogicEditor'
 import { STAGE_LABEL, stage } from '../lib/lifecycle'
 import { download, slug, toCsv, toDocument } from '../export/serialize'
 import { buildPrintDocument, printDocument } from '../export/pdf'
 import { PRINT_CSS } from '../export/print.css'
 import { exportToSheets, sheetsConfigured } from '../export/sheets'
 import { supabase } from '../lib/supabase'
+
+
+/**
+ * Hands an error to the progress page opened for an export. The page may not
+ * have finished loading when the export fails, so this waits for its hook to
+ * appear rather than assuming it is there.
+ */
+async function reportFailure(tab: Window | null, message: string): Promise<boolean> {
+  if (!tab || tab.closed) return false
+  for (let i = 0; i < 40; i++) {
+    try {
+      const hook = (tab as unknown as { exportFailed?: (m: string) => void }).exportFailed
+      if (typeof hook === 'function') {
+        hook(message)
+        return true
+      }
+    } catch {
+      // Cross origin for a moment while the page loads. Keep waiting.
+    }
+    if (tab.closed) return false
+    await new Promise((r) => setTimeout(r, 150))
+  }
+  return false
+}
+
 
 export default function AuditView() {
   const { auditId } = useParams()
@@ -101,22 +127,33 @@ export default function AuditView() {
     // Open the tab synchronously, while the click is still the active user
     // gesture. Opening it after the await gets silently blocked, because by
     // then the browser no longer connects the call to the click.
-    const tab = window.open('', '_blank')
+    // Point it at a real same origin page rather than about:blank. The user
+    // sees the app's own domain and a progress state for the few seconds the
+    // export takes, instead of a blank tab with no explanation.
+    const tab = window.open('/exporting/', '_blank')
     try {
       const { data } = await supabase.auth.getUser()
       const byline =
         (data.user?.user_metadata as { full_name?: string })?.full_name ?? data.user?.email ?? ''
       const url = await exportToSheets(brand, audit, findings, byline)
       if (tab && !tab.closed) {
-        tab.location.href = url
+        // replace, not assign, so Back does not land on the progress page.
+        try {
+          tab.location.replace(url)
+        } catch {
+          tab.location.href = url
+        }
         say('Sheet created in your Drive.')
       } else {
         // Blocked or closed. Hand over a link instead of losing the sheet.
         say('Sheet created in your Drive.', url)
       }
     } catch (e) {
-      if (tab && !tab.closed) tab.close()
-      say((e as Error).message)
+      const message = (e as Error).message
+      // Show the failure in the tab the user is looking at, rather than
+      // closing it out from under them and leaving the reason behind.
+      if (!(await reportFailure(tab, message))) tab?.close()
+      say(message)
     } finally {
       setBusy(false)
     }
@@ -131,6 +168,9 @@ export default function AuditView() {
           <Link to="/">Brands</Link><span>/</span>
           <Link to={`/brand/${brand.id}`}>{brand.name}</Link><span>/</span>
           <b>{audit.title}</b>
+          <span className={'modetag ' + audit.mode}>
+            {audit.mode === 'logic' ? 'Logic' : 'Manual'}
+          </span>
         </div>
         <span className="grow" />
         <button className="btn sm" onClick={exportJson}>JSON</button>
@@ -181,15 +221,25 @@ export default function AuditView() {
 
         <div className="pane">
           {current ? (
-            <FindingEditor
-              finding={current}
-              auditStatus={audit.status}
-              onChange={(f) => setFindings((p) => p.map((x) => (x.id === f.id ? f : x)))}
-              onDeleted={() => {
-                setFindings((p) => p.filter((x) => x.id !== current.id))
-                setSel(null)
-              }}
-            />
+            audit.mode === 'logic' ? (
+              <LogicEditor
+                finding={current}
+                audit={audit}
+                brand={brand}
+                all={findings}
+                onSaved={(f) => setFindings((p) => p.map((x) => (x.id === f.id ? f : x)))}
+              />
+            ) : (
+              <FindingEditor
+                finding={current}
+                auditStatus={audit.status}
+                onChange={(f) => setFindings((p) => p.map((x) => (x.id === f.id ? f : x)))}
+                onDeleted={() => {
+                  setFindings((p) => p.filter((x) => x.id !== current.id))
+                  setSel(null)
+                }}
+              />
+            )
           ) : (
             <div className="empty" style={{ marginTop: 40 }}>
               <b>Nothing selected</b>

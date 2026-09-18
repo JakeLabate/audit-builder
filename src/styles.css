@@ -274,3 +274,116 @@ input, select, textarea { font-size: 16px }
   .frow { padding: 14px 12px }
   .chip button { padding: 4px 7px }
 }
+
+/* login, four routes into one account */
+.login-oauth{display:grid;gap:9px}
+.btn.wide{width:100%;justify-content:center;padding:10px 14px}
+.btn.wide svg{flex:none}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.ghost:hover{border-color:transparent;color:var(--teal-d)}
+.or{display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--muted);font-size:11.5px;
+  font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.login-email{text-align:left}
+.login-email label{display:block;font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:7px}
+.login-email-row{display:flex;gap:8px}
+.login-email-row input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line-2);
+  border-radius:var(--r);padding:9px 11px;font-size:16px;color:var(--ink)}
+.login-email-row input::placeholder{color:var(--muted)}
+.login-email-row input:focus{outline:2px solid var(--teal);outline-offset:-1px;border-color:var(--teal)}
+.login-email-row .btn{padding:9px 16px}
+.login-fine{font-size:12.5px;color:var(--muted);margin:9px 0 0}
+.login-acts{display:grid;gap:9px;justify-items:center}
+.login-acts .btn{width:100%;justify-content:center;padding:10px 14px}
+.login-err{margin-top:18px;text-align:left}
+.sent-addr{color:var(--ink);font-weight:600;overflow-wrap:anywhere}
+
+
+
+/* ============================================================
+   Logic mode. A field the system produced states how it got its
+   value, because a derived field nobody can interrogate is worse
+   than a typed one: at least a typed number has an author.
+   ============================================================ */
+.modetag{
+  display:inline-block; margin-left:8px; padding:1px 7px; border-radius:100px;
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.1em; text-transform:uppercase;
+  border:1px solid var(--line-2); color:var(--muted); vertical-align:middle;
+}
+.modetag.logic{border-color:var(--teal); color:var(--teal-d); background:#F0F8F8}
+
+.logic{max-width:920px}
+.lbar{
+  position:sticky; top:54px; z-index:5; display:flex; align-items:center; gap:12px;
+  background:var(--surface); border-bottom:1px solid var(--line); padding:9px 0; margin-bottom:6px;
+}
+.lbar-s{font-family:var(--disp); font-weight:700; font-size:22px; color:var(--ink); line-height:1}
+.lbar-b{
+  font-family:var(--mono); font-size:11px; padding:3px 10px; border-radius:100px;
+  border:1px solid currentColor;
+}
+.lbar-b.b-p1{color:var(--crim); background:#FBEFF1}
+.lbar-b.b-p2{color:var(--amber); background:#FDF6E7}
+.lbar-b.b-p3{color:var(--teal-d); background:#F0F8F8}
+.lbar-b.b-p4,.lbar-b.b-none{color:var(--muted); background:var(--wash)}
+
+.lstop{
+  border-left:3px solid var(--crim); background:#FBEFF1; padding:11px 14px; margin:0 0 16px;
+  font-size:13px; color:var(--ink-2);
+}
+.lstop b{
+  display:block; font-family:var(--mono); font-size:9.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--crim); margin-bottom:4px;
+}
+.lstop ul{margin:0; padding-left:18px}
+.lstop li{margin:2px 0}
+
+.lgrp{margin:0 0 22px; border:1px solid var(--line); background:var(--surface); border-radius:var(--r)}
+.lgrp h3{
+  font-family:var(--disp); font-weight:600; font-size:15px; color:var(--ink);
+  margin:0; padding:13px 18px; border-bottom:1px solid var(--line);
+}
+.lgrid{display:grid; grid-template-columns:1fr 1fr; gap:16px 20px; padding:18px}
+@media (max-width:720px){ .lgrid{grid-template-columns:1fr} }
+
+.lf{display:flex; flex-direction:column; min-width:0}
+.lf-l{font-size:13.5px; font-weight:600; color:var(--ink); margin:0 0 3px}
+.lf-n{font-size:12px; color:var(--muted); margin:0 0 7px; line-height:1.45}
+.lf > input, .lf > select, .lf > textarea{margin-top:auto}
+
+.lf-d{background:var(--wash); border:1px solid var(--line); border-radius:var(--r); padding:11px 13px}
+.lf-h{display:flex; align-items:center; gap:8px; justify-content:space-between}
+.lf-k{
+  font-family:var(--mono); font-size:9px; letter-spacing:.11em; text-transform:uppercase;
+  padding:1px 6px; border-radius:2px; border:1px solid currentColor; flex:none;
+}
+.k-generated .lf-k{color:var(--violet)}
+.k-derived .lf-k{color:var(--teal-d)}
+.k-computed .lf-k{color:var(--ink-2)}
+.k-imported .lf-k{color:var(--amber)}
+.lf-v{
+  font-family:var(--mono); font-size:15px; color:var(--ink); margin:5px 0 0;
+  font-variant-numeric:tabular-nums; overflow-wrap:anywhere;
+}
+.lf-v em{font-style:normal; color:var(--line-2); font-size:13px}
+.lf-v code{font-family:var(--mono)}
+.lf-how{font-size:11.5px; color:var(--muted); margin:6px 0 0; line-height:1.45}
+
+.lchips{display:flex; flex-wrap:wrap; gap:6px; margin-top:auto}
+.lchip{
+  display:inline-flex; align-items:center; gap:6px; padding:5px 10px; cursor:pointer;
+  border:1px solid var(--line-2); border-radius:var(--r); font-size:12.5px; color:var(--ink-2);
+  background:var(--surface);
+}
+.lchip input{position:absolute; opacity:0; pointer-events:none}
+.lchip span{font-family:var(--mono); font-size:10px; color:var(--muted)}
+.lchip.on{background:#F0F8F8; border-color:var(--teal); color:var(--ink); font-weight:500}
+.lchip.on span{color:var(--teal-d)}
+.lchip:has(input:focus-visible){outline:2px solid var(--teal); outline-offset:2px}
+
+.lmoves{display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin-top:auto}
+.lnow{
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--teal-d); border:1px solid var(--teal); background:#F0F8F8;
+  padding:4px 9px; border-radius:100px;
+}

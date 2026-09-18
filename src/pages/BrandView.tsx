@@ -3,13 +3,14 @@ import { Link, useParams } from 'react-router-dom'
 import {
   createAudit, deleteAudit, deleteBrand, listAudits, listBrands, updateBrand,
 } from '../lib/api'
-import type { Audit, Brand } from '../lib/types'
+import type { Audit, AuditMode, Brand } from '../lib/types'
 
 export default function BrandView() {
   const { brandId } = useParams()
   const [brand, setBrand] = useState<Brand | null>(null)
   const [audits, setAudits] = useState<Audit[]>([])
   const [title, setTitle] = useState('Technical SEO Audit')
+  const [mode, setMode] = useState<AuditMode>('manual')
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
@@ -29,7 +30,7 @@ export default function BrandView() {
   async function add() {
     if (!brand || !title.trim()) return
     try {
-      const a = await createAudit(brand.org_id, brand.id, title.trim())
+      const a = await createAudit(brand.org_id, brand.id, title.trim(), mode)
       setAudits((p) => [a, ...p])
     } catch (e) {
       setErr((e as Error).message)
@@ -86,6 +87,15 @@ export default function BrandView() {
           onChange={(e) => setTitle(e.target.value)}
           style={{ padding: '7px 10px', border: '1px solid var(--line-2)', minWidth: 260 }}
         />
+        <select
+          value={mode}
+          onChange={(e) => setMode(e.target.value as AuditMode)}
+          style={{ padding: '7px 10px', border: '1px solid var(--line-2)' }}
+          aria-label="Audit mode"
+        >
+          <option value="manual">Manual · every field typed</option>
+          <option value="logic">Logic · generated, derived and constrained</option>
+        </select>
         <button className="btn pri" onClick={add}>New audit</button>
         <span className="grow" />
         <button className="btn danger" onClick={removeBrand}>Delete brand</button>
@@ -101,7 +111,7 @@ export default function BrandView() {
           {audits.map((a) => (
             <div className="card" key={a.id}>
               <Link to={`/audit/${a.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                <h3>{a.title}</h3>
+                <h3>{a.title} <span className={'modetag ' + a.mode}>{a.mode === 'logic' ? 'Logic' : 'Manual'}</span></h3>
                 <div className="meta">
                   {a.status} &nbsp;·&nbsp; {new Date(a.created_at).toLocaleDateString()}
                 </div>
