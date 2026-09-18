@@ -17,6 +17,7 @@ export type AffectedParty = 'end_users' | 'crawlers' | 'internal_team'
 export type PriorityBand = 'P1' | 'P2' | 'P3' | 'P4'
 export type ExampleKind = 'page_element' | 'markup' | 'response' | 'serp'
 export type AuditStatus = 'draft' | 'in_review' | 'delivered' | 'archived'
+export type AuditMode = 'manual' | 'logic'
 
 /** Whether the client ever sees this finding. Internal ones are never counted
  *  as ignored recommendations. */
@@ -89,6 +90,9 @@ export interface Brand {
   primary_color: string | null
   logo_path: string | null
   notes: string | null
+  /** Per-brand controlled vocabulary: pillars, templates and their universes,
+   *  markets, owner teams, metrics, units, and the crawl cadence. */
+  registry: Record<string, unknown>
   created_at: string
   updated_at: string
 }
@@ -101,6 +105,9 @@ export interface Audit {
   brand_id: string
   title: string
   status: AuditStatus
+  /** manual leaves every field to the consultant. logic generates, derives and
+   *  constrains the fields that do not need a human. */
+  mode: AuditMode
   scope_note: string | null
   sources: AuditSource[]
   gaps: string | null
@@ -150,7 +157,13 @@ export interface Finding {
   steps: string[]
   owner: string | null
   effort_days: number | null
+  /** Legacy single array, superseded by the two fields below. */
   dependencies: string[]
+  /** Findings that must land first. Real ids, so wave and leverage can be read
+   *  off the graph. */
+  depends_on: string[]
+  /** Blockers that are not findings: a deploy window, a sign off, a decision. */
+  external_blockers: string[]
   wave: number | null
 
   // risk

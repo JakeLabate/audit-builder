@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Audit, Brand, Example, Finding, FindingFull, FindingHistory, Org } from './types'
+import type { AuditMode, Audit, Brand, Example, Finding, FindingFull, FindingHistory, Org } from './types'
 import { band, riskFactor, score } from './score'
 
 /** RLS does the filtering, so no query here passes an org id as a filter. */
@@ -50,10 +50,12 @@ export async function getAudit(id: string): Promise<Audit | null> {
   return data
 }
 
-export async function createAudit(orgId: string, brandId: string, title: string): Promise<Audit> {
+export async function createAudit(
+  orgId: string, brandId: string, title: string, mode: AuditMode = 'manual',
+): Promise<Audit> {
   const { data, error } = await supabase
     .from('audits')
-    .insert({ org_id: orgId, brand_id: brandId, title })
+    .insert({ org_id: orgId, brand_id: brandId, title, mode })
     .select()
     .single()
   if (error) throw error

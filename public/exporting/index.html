@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Building your Google Sheet</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ink:#191A3E; --ink-2:#3B3D69; --muted:#71739A; --label:#4F5183;
+  --teal:#0E8C8B; --teal-d:#0A6C6B; --crim:#8A1C2B;
+  --bg:#FBFBFD; --surface:#fff; --wash:#F4F4F9; --line:#E2E2ED; --line-2:#CBCBDD;
+  --disp:'Space Grotesk','Helvetica Neue',Arial,sans-serif;
+  --body:'IBM Plex Sans',-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink-2);
+  font-family:var(--body);font-size:14.5px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.card{width:100%;max-width:460px}
+.mark{
+  font-family:var(--disp);font-weight:700;font-size:16px;letter-spacing:-.02em;
+  color:var(--ink);margin:0 0 28px;
+}
+.mark span{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);margin-left:9px;font-weight:400;
+}
+h1{
+  font-family:var(--disp);font-weight:700;font-size:22px;letter-spacing:-.02em;
+  color:var(--ink);margin:0 0 6px;
+}
+.sub{color:var(--muted);font-size:13.5px;margin:0 0 22px}
+.bar{height:2px;background:var(--line);border-radius:2px;overflow:hidden;margin:0 0 22px}
+.bar i{display:block;height:100%;width:32%;background:var(--teal);animation:slide 1.5s ease-in-out infinite}
+@keyframes slide{
+  0%{transform:translateX(-110%)}
+  100%{transform:translateX(330%)}
+}
+@media (prefers-reduced-motion: reduce){
+  .bar i{animation:none;width:100%;opacity:.5}
+  .dot{animation:none !important}
+}
+ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
+li{display:flex;align-items:baseline;gap:10px;font-size:13.5px;color:var(--muted);transition:color .2s}
+li .dot{
+  flex:none;width:6px;height:6px;border-radius:50%;background:var(--line-2);
+  position:relative;top:-2px;transition:background .2s;
+}
+li.on{color:var(--ink)}
+li.on .dot{background:var(--teal);animation:pulse 1.4s ease-in-out infinite}
+li.done{color:var(--label)}
+li.done .dot{background:var(--teal-d)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.note{
+  margin:26px 0 0;padding-top:16px;border-top:1px solid var(--line);
+  font-size:12.5px;color:var(--muted);
+}
+#err{display:none}
+#err h1{color:var(--crim)}
+#err .msg{
+  font-family:var(--mono);font-size:12.5px;color:var(--ink-2);
+  background:var(--wash);border:1px solid var(--line);border-radius:2px;
+  padding:11px 13px;margin:0 0 18px;white-space:pre-wrap;word-break:break-word;
+}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <p class="mark">AuditBuilder<span>Export</span></p>
+
+  <div id="work">
+    <h1>Building your Google Sheet</h1>
+    <p class="sub">This takes a few seconds. The sheet opens here when it is ready.</p>
+    <div class="bar"><i></i></div>
+    <ol id="steps">
+      <li data-s><span class="dot"></span>Reading the finding register</li>
+      <li data-s><span class="dot"></span>Creating the spreadsheet in your Drive</li>
+      <li data-s><span class="dot"></span>Writing the summary, findings and roadmap</li>
+      <li data-s><span class="dot"></span>Applying formatting</li>
+    </ol>
+    <p class="note" id="note">Keep this tab open.</p>
+  </div>
+
+  <div id="err">
+    <h1>The export did not finish</h1>
+    <p class="sub">Close this tab and try again. If a half built sheet turned up in your Drive, delete it first.</p>
+    <p class="msg" id="errmsg"></p>
+    <p class="note">If it keeps failing, check that AuditBuilder still has access to your Google account.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  var items = Array.prototype.slice.call(document.querySelectorAll('#steps li'))
+  var i = 0
+  function advance() {
+    if (i > 0) { items[i - 1].classList.remove('on'); items[i - 1].classList.add('done') }
+    if (i < items.length) { items[i].classList.add('on'); i++ }
+  }
+  advance()
+  var tick = setInterval(function () {
+    if (i >= items.length) { clearInterval(tick); return }
+    advance()
+  }, 1400)
+
+  // If the opener dies or the export hangs, stop pretending something is happening.
+  setTimeout(function () {
+    var n = document.getElementById('note')
+    if (n) n.textContent = 'Still working. If nothing happens in the next minute, close this tab and try again.'
+  }, 45000)
+
+  // Called by the opener when the export throws. Same origin, so a direct
+  // call on the window handle works and needs no message plumbing.
+  window.exportFailed = function (message) {
+    clearInterval(tick)
+    document.getElementById('work').style.display = 'none'
+    document.getElementById('errmsg').textContent = String(message || 'Unknown error')
+    document.getElementById('err').style.display = 'block'
+    document.title = 'Export failed'
+  }
+})()
+</script>
+
+</body>
+</html>
