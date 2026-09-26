@@ -187,6 +187,18 @@ export async function uploadEvidence(orgId: string, file: File): Promise<string>
   return path
 }
 
+/** Brand logos share the evidence bucket, so no new policy is needed. The
+ *  name marks them so they are distinguishable from finding exhibits. */
+export async function uploadBrandAsset(
+  orgId: string, brandId: string, slot: string, file: File,
+): Promise<string> {
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? 'png'
+  const path = `${orgId}/brand-${brandId}-${slot}-${crypto.randomUUID()}.${ext}`
+  const { error } = await supabase.storage.from('evidence').upload(path, file, { upsert: true })
+  if (error) throw error
+  return path
+}
+
 export async function evidenceUrl(path: string): Promise<string | null> {
   const { data, error } = await supabase.storage.from('evidence').createSignedUrl(path, 3600)
   if (error) return null

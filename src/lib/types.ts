@@ -90,6 +90,9 @@ export interface Brand {
   primary_color: string | null
   logo_path: string | null
   notes: string | null
+  /** The brand kit the report generator draws from: logos, colours, slogan,
+   *  typography, voice and the client contact. Read it through identityOf. */
+  identity: Record<string, unknown>
   /** Per-brand controlled vocabulary: pillars, templates and their universes,
    *  markets, owner teams, metrics, units, and the crawl cadence. */
   registry: Record<string, unknown>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  createFinding, getAudit, listBrands, listFindings, nextRef, updateAudit,
+  evidenceUrl, createFinding, getAudit, listBrands, listFindings, nextRef, updateAudit,
 } from '../lib/api'
 import type { Audit, Brand, FindingFull } from '../lib/types'
 import FindingEditor from '../components/FindingEditor'
@@ -9,6 +9,7 @@ import LogicEditor from '../components/LogicEditor'
 import { STAGE_LABEL, stage } from '../lib/lifecycle'
 import { download, slug, toCsv, toDocument } from '../export/serialize'
 import { buildPrintDocument, printDocument } from '../export/pdf'
+import { identityOf } from '../lib/brand'
 import { PRINT_CSS } from '../export/print.css'
 import { exportToSheets, sheetsConfigured } from '../export/sheets'
 import { supabase } from '../lib/supabase'
@@ -118,7 +119,15 @@ export default function AuditView() {
     const { data } = await supabase.auth.getUser()
     const byline =
       (data.user?.user_metadata as { full_name?: string })?.full_name ?? data.user?.email ?? ''
-    printDocument(buildPrintDocument(brand, audit, findings, byline), PRINT_CSS, audit.title)
+    // The logo lives in a private bucket, so it has to be signed before the
+    // print window can load it. A missing logo is not an error: the cover
+    // simply falls back to the wordmark.
+    const path = identityOf(brand).logo_path
+    const logoUrl = path ? await evidenceUrl(path) : null
+    printDocument(
+      buildPrintDocument(brand, audit, findings, byline, logoUrl),
+      PRINT_CSS, audit.title,
+    )
   }
 
   async function exportSheets() {

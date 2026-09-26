@@ -4,6 +4,7 @@ import {
   createAudit, deleteAudit, deleteBrand, listAudits, listBrands, updateBrand,
 } from '../lib/api'
 import type { Audit, AuditMode, Brand } from '../lib/types'
+import BrandKit from '../components/BrandKit'
 
 export default function BrandView() {
   const { brandId } = useParams()
@@ -11,6 +12,7 @@ export default function BrandView() {
   const [audits, setAudits] = useState<Audit[]>([])
   const [title, setTitle] = useState('Technical SEO Audit')
   const [mode, setMode] = useState<AuditMode>('manual')
+  const [tab, setTab] = useState<'audits' | 'kit'>('audits')
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
@@ -81,6 +83,18 @@ export default function BrandView() {
         </div>
       </div>
 
+      <div className="tabs" style={{ marginTop: 20 }}>
+        <button className={'tab' + (tab === 'audits' ? ' on' : '')} onClick={() => setTab('audits')}>
+          Audits
+        </button>
+        <button className={'tab' + (tab === 'kit' ? ' on' : '')} onClick={() => setTab('kit')}>
+          Brand kit
+        </button>
+      </div>
+
+      {tab === 'kit' && <BrandKit brand={brand} onChange={setBrand} />}
+
+      {tab === 'audits' && (<>
       <div className="bar" style={{ marginTop: 22 }}>
         <input
           value={title}
@@ -124,6 +138,7 @@ export default function BrandView() {
           ))}
         </div>
       )}
+      </>)}
     </div>
   )
 }

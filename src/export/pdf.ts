@@ -1,5 +1,6 @@
 import type { Audit, Brand, FindingFull } from '../lib/types'
 import { BAND_LABEL } from '../lib/score'
+import { fontHref, identityOf, reportPalette } from '../lib/brand'
 
 /**
  * PDF export. The browser's own print engine does the rendering, so there is
@@ -74,21 +75,59 @@ export function buildPrintDocument(
   audit: Audit,
   findings: FindingFull[],
   byline: string,
+  /** Signed URL for the brand logo. Resolved by the caller, because the
+   *  bucket is private and this function is pure. */
+  logoUrl?: string | null,
 ): string {
   const ordered = [...findings].sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
   const counts = { P1: 0, P2: 0, P3: 0, P4: 0 } as Record<string, number>
   for (const f of ordered) if (f.band) counts[f.band]++
 
-  const cover = `<div class="page"><div class="pg cover">
+  const id = identityOf(brand)
+  const pal = reportPalette(id)
+
+  // The brand's own colours and faces, injected as variables the print
+  // stylesheet already reads. A pale brand colour would make white cover text
+  // unreadable, so what goes on top is decided by contrast, not assumed.
+  const brandCss = `<style>
+    @import url('${fontHref(id)}');
+    :root{
+      --brand:${pal.primary}; --brand-on:${pal.onPrimary}; --brand-ink:${pal.ink};
+      --brand-accent:${pal.accent}; --brand-wash:${pal.wash}; --brand-rule:${pal.rule};
+      --disp:'${id.type.display}',Georgia,serif; --body:'${id.type.body}',Arial,sans-serif;
+      --teal-d:${pal.accent};
+    }
+    .cover{background:${pal.primary};color:${pal.onPrimary}}
+    .cover .chip{background:transparent;border:1px solid ${pal.onPrimary};color:${pal.onPrimary}}
+    .cover .cvtitle,.cover .cvsub,.cover .cvstats b,.cover .cvstats span,.cover .cvfoot{color:${pal.onPrimary}}
+    .cover .cvstats{border-top:1px solid ${pal.onPrimary}55;border-bottom:1px solid ${pal.onPrimary}55}
+    .cvlogo{max-height:16mm;max-width:70mm;margin-bottom:auto}
+    .cvslogan{font-family:var(--disp);font-size:13pt;font-weight:500;opacity:.85;margin:3mm 0 0}
+    .cvcontact{font-family:var(--mono);font-size:7.6pt;letter-spacing:.1em;text-transform:uppercase;
+      opacity:.75;margin:7mm 0 0}
+  </style>`
+
+  const logo = logoUrl
+    ? `<img class="cvlogo" src="${esc(logoUrl)}" alt="${esc(brand.name)}">`
+    : '<div class="cvlogo"></div>'
+
+  const contact = id.contact.name
+    ? `<p class="cvcontact">Prepared for ${esc(id.contact.name)}${id.contact.role ? `, ${esc(id.contact.role)}` : ''}</p>`
+    : ''
+
+  const cover = `${brandCss}<div class="page"><div class="pg cover">
+    ${logo}
     <div class="chip">Technical SEO Audit</div>
     <h1 class="cvtitle">${esc(audit.title)}</h1>
-    <p class="cvsub">${esc(brand.name)}${brand.domain ? ` &nbsp;·&nbsp; ${esc(brand.domain)}` : ''}</p>
+    <p class="cvsub">${esc(id.legal_name ?? brand.name)}${brand.domain ? ` &nbsp;·&nbsp; ${esc(brand.domain)}` : ''}</p>
+    ${id.slogan ? `<p class="cvslogan">${esc(id.slogan)}</p>` : ''}
     <div class="cvstats">
       <div><b>${ordered.length}</b><span>Findings</span></div>
       <div><b>${counts.P1}</b><span>P1, do first</span></div>
       <div><b>${counts.P2}</b><span>P2, scheduled</span></div>
-      <div><b>${audit.urls_crawled ?? '--'}</b><span>URLs crawled</span></div>
+      <div><b>${audit.urls_crawled != null ? audit.urls_crawled.toLocaleString('en-US') : '--'}</b><span>URLs crawled</span></div>
     </div>
+    ${contact}
     <div class="cvfoot"><span>${esc(byline)}</span><span>${esc(audit.delivered_on ?? new Date().toISOString().slice(0, 10))}</span></div>
   </div></div>`
 
