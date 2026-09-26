@@ -6,7 +6,7 @@ import { PRINT_CSS } from '../export/print.css'
 import { exportToSheets } from '../export/sheets'
 import { CATALOGUE, pageCount, sectionsOf, type SectionChoice } from '../lib/sections'
 import { SHEET_COLUMNS, columnsOf, withRefs, type ColChoice } from '../lib/sheetcols'
-import { DEPTHS, clientFindings, depthOf, type Depth } from '../lib/depth'
+import { clientFindings } from '../lib/depth'
 
 /**
  * One export, two halves.
@@ -42,7 +42,6 @@ export default function ExportModal({
   const [tab, setTab] = useState<Tab>('document')
   const [sections, setSections] = useState<SectionChoice[]>(() => sectionsOf(audit))
   const [cols, setCols] = useState<ColChoice[]>(() => columnsOf(audit))
-  const [depth, setDepth] = useState<Depth>(() => depthOf(audit).key)
   const [doc, setDoc] = useState('')
   const [scale, setScale] = useState(0.5)
   const [busy, setBusy] = useState(false)
@@ -85,7 +84,7 @@ export default function ExportModal({
     if (tab !== 'document') return
     window.clearTimeout(draw.current)
     draw.current = window.setTimeout(() => {
-      const preview = { ...audit, sections, depth } as Audit
+      const preview = { ...audit, sections } as Audit
       const html = buildPrintDocument(brand, preview, findings, byline, logoUrl, null)
       setDoc(`<!doctype html><html><head><meta charset="utf-8">
         <style>${PRINT_CSS}
@@ -95,13 +94,13 @@ export default function ExportModal({
     }, 140)
     return () => window.clearTimeout(draw.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, depth, findings, brand, logoUrl, byline, tab])
+  }, [sections, findings, brand, logoUrl, byline, tab])
 
   useEffect(() => {
     window.clearTimeout(save.current)
     save.current = window.setTimeout(async () => {
       try {
-        const patch = { sections, sheet_columns: cols, depth } as unknown as Partial<Audit>
+        const patch = { sections, sheet_columns: cols } as unknown as Partial<Audit>
         await updateAudit(audit.id, patch)
         onChange({ ...audit, ...patch } as Audit)
         setErr(null)
@@ -111,7 +110,7 @@ export default function ExportModal({
     }, 600)
     return () => window.clearTimeout(save.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, cols, depth])
+  }, [sections, cols])
 
   /**
    * The register is made first so the document can point at it. If Google is
@@ -121,7 +120,7 @@ export default function ExportModal({
   const run = useCallback(async () => {
     setBusy(true)
     setErr(null)
-    const live = { ...audit, sections, sheet_columns: cols, depth } as Audit
+    const live = { ...audit, sections, sheet_columns: cols } as Audit
     let sheetUrl: string | null = null
     try {
       if (sheetsReady) sheetUrl = await exportToSheets(brand, live, findings, byline)
@@ -139,7 +138,7 @@ export default function ExportModal({
     } finally {
       setBusy(false)
     }
-  }, [audit, sections, cols, depth, brand, findings, byline, logoUrl, sheetsReady, say])
+  }, [audit, sections, cols, brand, findings, byline, logoUrl, sheetsReady, say])
 
   const secMeta = (k: string) => CATALOGUE.find((c) => c.key === k)!
   const colMeta = new Map(SHEET_COLUMNS.map((c) => [c.key, c]))
@@ -184,28 +183,12 @@ export default function ExportModal({
           <div className="rs-pane">
             {tab === 'document' ? (
               <>
-                <div className="rs-pane-hd"><h3>How much each finding shows</h3></div>
+                <div className="rs-pane-hd"><h3>What the document contains</h3></div>
                 <p className="rs-pane-sub">
-                  Every finding gets its own page. This sets how much of it the page carries,
-                  and the rest stays in the register.
+                  Every finding gets its own page, carrying the measurements behind the claim
+                  and the exhibit that shows it. Everything else is in the register.
                 </p>
-                <div className="opts ex-depth">
-                  {DEPTHS.map((d) => (
-                    <label key={d.key} className={'opt' + (depth === d.key ? ' on' : '')}>
-                      <input type="radio" name="depth" checked={depth === d.key}
-                        onChange={() => setDepth(d.key)} />
-                      <span className="rs-box round" />
-                      <span className="rs-body">
-                        <span className="rs-name">{d.name}</span>
-                        <span className="rs-what">{d.who}</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
 
-                <div className="rs-pane-hd" style={{ marginTop: 22 }}>
-                  <h3>What the document contains</h3>
-                </div>
                 <ol className="rs-list">
                   {sections.map((s, i) => {
                     const c = secMeta(s.key)

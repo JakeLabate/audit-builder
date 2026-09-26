@@ -638,21 +638,6 @@ input, select, textarea { font-size: 16px }
 }
 .ex-tabs .tab.on span{color:var(--teal-d)}
 
-.ex-depth{margin-top:4px}
-.ex-depth .opt{align-items:flex-start;gap:11px;padding:11px 13px;cursor:pointer;position:relative}
-.ex-depth .opt input{position:absolute;opacity:0;pointer-events:none}
-.ex-depth .rs-box.round{border-radius:50%;margin-top:1px}
-.ex-depth .opt.on{background:#F0F8F8;border-color:var(--teal)}
-.ex-depth .opt.on .rs-box{background:var(--teal);border-color:var(--teal)}
-.ex-depth .opt.on .rs-box::after{
-  content:"";position:absolute;left:5px;top:5px;width:6px;height:6px;
-  border-radius:50%;background:#fff;border:0;transform:none;
-}
-.ex-depth .rs-body{display:flex;flex-direction:column;gap:2px}
-.ex-depth .rs-name{font-size:13.5px}
-.ex-depth .rs-what{font-size:12px;margin:0}
-.ex-depth .opt:has(input:focus-visible){outline:2px solid var(--teal);outline-offset:2px}
-
 .modal-hd{align-items:flex-end}
 .modal-x{align-self:flex-start}
 .modal-x:disabled{opacity:.4;cursor:not-allowed}
