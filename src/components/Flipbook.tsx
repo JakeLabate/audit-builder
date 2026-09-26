@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { buildStandaloneDocument } from '../export/pdf'
 
 /**
  * A document you can leaf through.
@@ -28,7 +29,7 @@ export default function Flipbook({ pages, css, label }: {
   pages: string[]; css: string; label: string
 }) {
   const [spread, setSpread] = useState(0)
-  const [turn, setTurn] = useState<{ dir: 'next' | 'prev'; from: number } | null>(null)
+  const [turn, setTurn] = useState<{ dir: 'next' | 'prev'; from: number; armed: boolean } | null>(null)
   const [single, setSingle] = useState(false)
   const [scale, setScale] = useState(0.4)
   const box = useRef<HTMLDivElement>(null)
@@ -64,9 +65,16 @@ export default function Flipbook({ pages, css, label }: {
       const to = dir === 'next' ? s + 1 : s - 1
       if (to < 0 || to > last) return s
       if (!reduced && !single) {
-        setTurn({ dir, from: s })
+        // Two steps, a frame apart. The first puts the faces in their starting
+        // positions and asks for a compositing layer; the second starts the
+        // animation. Done in one go, layer creation lands on the animation's
+        // first frame and costs 50ms of it, which is the whole budget for
+        // three frames and reads as a stutter right at the start.
+        setTurn({ dir, from: s, armed: false })
+        requestAnimationFrame(() => requestAnimationFrame(() =>
+          setTurn((t) => (t ? { ...t, armed: true } : t))))
         window.clearTimeout(timer.current)
-        timer.current = window.setTimeout(() => setTurn(null), TURN_MS)
+        timer.current = window.setTimeout(() => setTurn(null), TURN_MS + 40)
       }
       return to
     })
@@ -118,7 +126,8 @@ export default function Flipbook({ pages, css, label }: {
   return (
     <figure className="fb" aria-label={label}>
       <div className="fb-stage" ref={box}>
-        <div className={'fb-book' + (single ? ' one' : '') + (turn ? ' turning ' + turn.dir : '')}
+        <div className={'fb-book' + (single ? ' one' : '')
+          + (turn ? ` arm ${turn.dir}` + (turn.armed ? ' turning' : '') : '')}
           style={{ width: single ? w : w * 2, height: h }}>
           <div className="fb-gutter" style={{ width: single ? w : w * 2, height: h }} />
           {pages.map((html, i) => (
@@ -126,7 +135,7 @@ export default function Flipbook({ pages, css, label }: {
               style={{ width: w, height: h, ['--pw' as string]: `${w}px` }}
               aria-hidden={roles[i] === 'hidden' || undefined}>
               <iframe
-                className="fb-frame" srcDoc={frame(html, css)} scrolling="no"
+                className="fb-frame" srcDoc={frame(html, css, i + 1)} scrolling="no"
                 title={`Page ${i + 1}`} tabIndex={-1}
                 style={{ width: PAGE_W, height: PAGE_H,
                   transform: `scale(${scale})`, transformOrigin: 'top left' }}
@@ -151,9 +160,15 @@ export default function Flipbook({ pages, css, label }: {
   )
 }
 
-const frame = (html: string, css: string) => `<!doctype html><html><head><meta charset="utf-8">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<style>${css}
+/**
+ * The same document the printer builds, fit pass and all.
+ *
+ * Without it a page that carries more than fits simply overflows: the fix
+ * steps ran straight through the running footer on three of the fifteen
+ * sample pages. buildStandaloneDocument is what the renderer uses, so using it
+ * here is also the only way this can honestly claim to show what prints.
+ */
+const frame = (html: string, css: string, n: number) =>
+  buildStandaloneDocument(html, `${css}
   html,body{margin:0;overflow:hidden;background:#fff}
-  .page{page-break-after:auto}
-</style></head><body>${html}</body></html>`
+  .page{page-break-after:auto}`, `Page ${n}`)

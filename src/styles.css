@@ -804,11 +804,6 @@ input, select, textarea { font-size: 16px }
    The turn is two faces rotating about the same edge, not a nested leaf, so
    every page stays a stable sibling and keeps its already painted iframe. */
 .fb{margin:16px 0 8px;padding:0}
-/* The document is the point of this section, so let it out of the text column.
-   A spread needs about 1100px; inside 760px it would always be one page up. */
-@media (min-width:860px){
-  .fb,.rp{width:min(94vw,1200px);margin-left:50%;transform:translateX(-50%)}
-}
 .fb-stage{display:flex;justify-content:center;padding:16px 10px;background:var(--wash);
   border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .fb-book{position:relative;perspective:2600px}
@@ -818,28 +813,42 @@ input, select, textarea { font-size: 16px }
   rgba(25,26,62,.10) 50%,rgba(25,26,62,0) calc(50% + 10px),#fff calc(50% + 10px) 100%)}
 
 .fb-page{position:absolute;top:0;overflow:hidden;background:#fff;
-  backface-visibility:hidden;transform-style:preserve-3d}
+  backface-visibility:hidden;transform-style:preserve-3d;contain:paint}
 .fb-frame{border:0;display:block;background:#fff;pointer-events:none}
 
-.fb-page.r-hidden{opacity:0;pointer-events:none;left:0;z-index:0}
-.fb-page.r-left{left:0;z-index:1}
-.fb-page.r-right{left:var(--pw);z-index:1}
+/* visibility, not opacity. An opacity:0 iframe still paints every frame, so
+   all fifteen pages were being rasterised during a turn and it stuttered. */
+.fb-page.r-hidden{visibility:hidden;pointer-events:none;left:0;z-index:0}
+/* The two pages that can turn keep a compositing layer even at rest. Without
+   it the first turn after load pays for layer allocation inside its own first
+   frame and drops two or three, which is exactly the part a reader notices.
+   Two layers is a cheap price; promoting all fifteen would not be. */
+.fb-page.r-left{left:0;z-index:1;will-change:transform}
+.fb-page.r-right{left:var(--pw);z-index:1;will-change:transform}
 .fb-book.one .fb-page.r-left{left:0}
 
+/* Armed: faces placed and promoted, one frame before anything moves. */
+.fb-book.arm.next .fb-page.r-away{left:var(--pw);z-index:4;transform-origin:left center;
+  transform:rotateY(0);will-change:transform;box-shadow:0 2px 20px rgba(25,26,62,.24)}
+.fb-book.arm.next .fb-page.r-incoming{left:var(--pw);z-index:3;transform-origin:left center;
+  transform:rotateY(180deg);will-change:transform}
+.fb-book.arm.prev .fb-page.r-away{left:0;z-index:4;transform-origin:right center;
+  transform:rotateY(0);will-change:transform;box-shadow:0 2px 20px rgba(25,26,62,.24)}
+.fb-book.arm.prev .fb-page.r-incoming{left:0;z-index:3;transform-origin:right center;
+  transform:rotateY(-180deg);will-change:transform}
+
 /* Turning forward: the old right page swings across to become the new left. */
-.fb-book.turning.next .fb-page.r-away{left:var(--pw);z-index:4;transform-origin:left center;
-  animation:fb-away .62s cubic-bezier(.36,.06,.24,1) forwards;
-  box-shadow:0 2px 20px rgba(25,26,62,.24)}
-.fb-book.turning.next .fb-page.r-incoming{left:var(--pw);z-index:3;transform-origin:left center;
+.fb-book.turning.next .fb-page.r-away{
+  animation:fb-away .62s cubic-bezier(.36,.06,.24,1) forwards}
+.fb-book.turning.next .fb-page.r-incoming{
   animation:fb-in .62s cubic-bezier(.36,.06,.24,1) forwards}
 @keyframes fb-away{from{transform:rotateY(0)}to{transform:rotateY(-180deg)}}
 @keyframes fb-in{from{transform:rotateY(180deg)}to{transform:rotateY(0)}}
 
 /* And backward, about the other edge. */
-.fb-book.turning.prev .fb-page.r-away{left:0;z-index:4;transform-origin:right center;
-  animation:fb-away-b .62s cubic-bezier(.36,.06,.24,1) forwards;
-  box-shadow:0 2px 20px rgba(25,26,62,.24)}
-.fb-book.turning.prev .fb-page.r-incoming{left:0;z-index:3;transform-origin:right center;
+.fb-book.turning.prev .fb-page.r-away{
+  animation:fb-away-b .62s cubic-bezier(.36,.06,.24,1) forwards}
+.fb-book.turning.prev .fb-page.r-incoming{
   animation:fb-in-b .62s cubic-bezier(.36,.06,.24,1) forwards}
 @keyframes fb-away-b{from{transform:rotateY(0)}to{transform:rotateY(180deg)}}
 @keyframes fb-in-b{from{transform:rotateY(-180deg)}to{transform:rotateY(0)}}
@@ -860,10 +869,20 @@ input, select, textarea { font-size: 16px }
 
 /* ---- Register preview --------------------------------------------------- */
 .rp{margin:16px 0 8px}
+
+/* Let the document and the register out of the 760px text column. A spread
+   needs about 1100px, and the register is 33 columns wide.
+   This has to come after both .fb and .rp set their own margins: an earlier
+   version sat above the `.rp{margin:...}` shorthand, which reset margin-left
+   to 0 while translateX(-50%) still fired, and pushed the register exactly
+   half its own width off the left of the screen. */
+@media (min-width:860px){
+  .fb,.rp{width:min(94vw,1200px);margin-left:50%;transform:translateX(-50%)}
+}
 .rp-scroll{overflow-x:auto;overflow-y:hidden;border:1px solid var(--line);border-radius:var(--r);
   background:var(--surface);-webkit-overflow-scrolling:touch}
 .rp-tab{border-collapse:collapse;font-size:11.5px;table-layout:fixed}
-.rp-tab th{position:sticky;top:0;text-align:left;font-size:10.5px;font-weight:600;
+.rp-tab th{text-align:left;font-size:10.5px;font-weight:600;
   color:#fff;background:var(--ink);padding:7px 9px;white-space:nowrap;
   border-right:1px solid rgba(255,255,255,.14)}
 .rp-note td{font-size:9.5px;line-height:1.35;font-style:italic;color:#6B5B72;

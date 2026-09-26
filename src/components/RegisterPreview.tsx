@@ -15,7 +15,7 @@ export default function RegisterPreview({ reg }: {
         <table className="rp-tab">
           <thead>
             <tr>{reg.headers.map((h, i) => (
-              <th key={i} style={{ minWidth: Math.min(reg.widths[i] ?? 140, 300) }}>{h}</th>
+              <th key={i} style={{ minWidth: Math.min(reg.widths[i] ?? 140, 210) }}>{h}</th>
             ))}</tr>
             <tr className="rp-note">{reg.notes.map((n, i) => <td key={i}>{n}</td>)}</tr>
           </thead>

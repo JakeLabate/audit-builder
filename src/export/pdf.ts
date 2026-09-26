@@ -317,7 +317,7 @@ export function buildPrintDocument(
     <div class="cvfoot"><span>${esc(byline)}</span><span>${esc(audit.delivered_on ?? new Date().toISOString().slice(0, 10))}</span></div>
   </div></div>`
 
-  const index = `<div class="page"><div class="pg">
+  const index = (folio: number) => `<div class="page"><div class="pg">
     <div class="sect">Document index</div>
     <h1 class="ttl">Findings, In Priority Order</h1>
     <table class="idx">${ordered
@@ -326,15 +326,28 @@ export function buildPrintDocument(
           `<tr><td class="n">${i + 1}</td><td>${esc(f.title)}</td><td class="b">${esc(f.band ?? '')}</td><td class="s">${f.score ?? ''}</td></tr>`,
       )
       .join('')}</table>
-    <div class="foot"><span>Front matter</span><span>${esc(brand.name)} / ${esc(audit.title)}</span><span>2</span></div>
+    <div class="foot"><span>Front matter</span><span>${esc(brand.name)} / ${esc(audit.title)}</span><span>${folio}</span></div>
   </div></div>`
 
-  const built: Record<SectionKey, () => string> = {
+  // Page numbers used to be constants: the contents page said 2 and findings
+  // counted from 3. That was only ever right for one arrangement of sections,
+  // and the whole point of the export dialog is that you can choose them and
+  // reorder them. With the defaults on it was already wrong by two, so a
+  // client reading "page 5" in the footer was looking at the seventh sheet.
+  // The folio is now counted off the sections that are actually in the
+  // document, in the order they actually appear.
+  const sheets: Record<SectionKey, number> = {
+    cover: 1, summary: 1, contents: 1, method: 1,
+    findings: ordered.length, roadmap: 1, appendix: 1,
+  }
+
+  const built: Record<SectionKey, (folio: number) => string> = {
     cover: () => cover,
     summary: () => summaryPage(ordered, counts),
-    contents: () => index,
+    contents: (folio) => index(folio),
     method: () => methodPage(audit),
-    findings: () => ordered.map((f, i) => findingPage(f, brand, audit, i + 3, d, sheetUrl)).join(''),
+    findings: (folio) =>
+      ordered.map((f, i) => findingPage(f, brand, audit, folio + i, d, sheetUrl)).join(''),
     roadmap: () => roadmapPage(ordered),
     appendix: () => appendixPage(),
   }
@@ -342,7 +355,14 @@ export function buildPrintDocument(
   // The cover carries the brand variables, so when it is switched off the
   // style block still has to lead or the rest of the document loses the kit.
   const chosen = sectionsOf(audit).filter((s) => s.on)
-  const body = chosen.map((s) => built[s.key]?.() ?? '').join('')
+  let folio = 1
+  const body = chosen
+    .map((s) => {
+      const html = built[s.key]?.(folio) ?? ''
+      folio += sheets[s.key] ?? 1
+      return html
+    })
+    .join('')
   return chosen[0]?.key === 'cover' ? body : `${brandCss}${body}`
 }
 
