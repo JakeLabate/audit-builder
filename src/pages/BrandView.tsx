@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { DEFAULT_KIND } from '../lib/kind'
 import { Link, useParams } from 'react-router-dom'
 import {
   createAudit, deleteAudit, deleteBrand, listAudits, listBrands, updateBrand,
@@ -10,7 +11,7 @@ export default function BrandView() {
   const { brandId } = useParams()
   const [brand, setBrand] = useState<Brand | null>(null)
   const [audits, setAudits] = useState<Audit[]>([])
-  const [title, setTitle] = useState('Technical SEO Audit')
+  const [title, setTitle] = useState(DEFAULT_KIND)
   const [mode, setMode] = useState<AuditMode>('manual')
   const [tab, setTab] = useState<'audits' | 'kit'>('audits')
   const [err, setErr] = useState<string | null>(null)

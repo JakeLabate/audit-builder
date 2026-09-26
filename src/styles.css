@@ -641,3 +641,16 @@ input, select, textarea { font-size: 16px }
 .modal-hd{align-items:flex-end}
 .modal-x{align-self:flex-start}
 .modal-x:disabled{opacity:.4;cursor:not-allowed}
+
+/* The cover label, edited where it previews. */
+.rs-kind{margin:0 0 18px;padding:0 0 16px;border-bottom:1px solid var(--line)}
+.rs-kind label{display:block;font-size:12px;font-weight:600;color:var(--label);margin-bottom:6px}
+.rs-kind input{width:100%;padding:8px 10px;font:inherit;font-size:14px;color:var(--ink);
+  border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface)}
+.rs-kind input:focus{outline:2px solid var(--teal-d);outline-offset:-1px}
+.rs-kind .hint{margin:6px 0 0}
+
+.kit-logo-url{display:block;font-size:12px;font-weight:600;color:var(--label);margin:12px 0 6px}
+.kit-logo-url-in{width:100%;max-width:340px;padding:7px 9px;font:inherit;font-size:13px;color:var(--ink);
+  border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface)}
+.kit-logo-url-in:focus{outline:2px solid var(--teal-d);outline-offset:-1px}

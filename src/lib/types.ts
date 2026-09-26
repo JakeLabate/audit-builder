@@ -107,6 +107,9 @@ export interface Audit {
   org_id: string
   brand_id: string
   title: string
+  /** What kind of document this is, printed on the cover. Null means the
+   *  neutral default: not every audit is a technical one. */
+  kind: string | null
   status: AuditStatus
   /** manual leaves every field to the consultant. logic generates, derives and
    *  constrains the fields that do not need a human. */

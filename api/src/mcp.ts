@@ -87,8 +87,20 @@ export const TOOLS: Tool[] = [
   },
   {
     name: 'create_brand',
-    description: 'Add a brand.',
-    inputSchema: params({ name: str(''), domain: str(''), notes: str('') }, ['name']),
+    description:
+      'Add a brand. identity carries the brand kit the report is drawn with: ' +
+      'colours, fonts, slogan and logo. logo_path takes a hosted URL.',
+    inputSchema: params({
+      name: str(''), domain: str(''), notes: str(''),
+      primary_color: str('Hex, for example #7B189F.'),
+      identity: {
+        type: 'object',
+        description:
+          'Brand kit: legal_name, slogan, industry, voice, ' +
+          'colors {primary, accent, ink}, type {display, body}, ' +
+          'contact {name, role, email}, and logo_path as an https URL.',
+      },
+    }, ['name']),
     run: (env, ctx, a) => brands.create(env, ctx, a),
   },
   {
@@ -117,6 +129,7 @@ export const TOOLS: Tool[] = [
       brand_id: str(''),
       title: str(''),
       mode: { type: 'string', enum: ['manual', 'logic'] },
+      kind: str('What the cover calls this document. Defaults to SEO Audit.'),
       scope_note: str(''),
       sources: {
         type: 'array',

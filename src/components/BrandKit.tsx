@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { DEFAULT_KIND } from '../lib/kind'
 import type { Brand } from '../lib/types'
 import { evidenceUrl, updateBrand, uploadBrandAsset } from '../lib/api'
 import {
@@ -128,6 +129,19 @@ export default function BrandKit({
               <p className="hint" style={{ marginTop: 8 }}>
                 PNG or SVG with a transparent background reads best on a coloured cover. Up to 4MB.
               </p>
+              <label className="kit-logo-url">Or paste a hosted URL</label>
+              <input className="kit-logo-url-in" type="url" placeholder="https://..."
+                defaultValue={/^https?:\/\//i.test(id.logo_path ?? '') ? (id.logo_path ?? '') : ''}
+                onBlur={(e) => {
+                  const v = e.target.value.trim()
+                  if (!v) return
+                  if (!/^https?:\/\//i.test(v)) return
+                  set('logo_path', v)
+                }} />
+              <p className="hint">
+                Most brands already host a logo. A URL saves the upload, and it is the only
+                way the API can set one.
+              </p>
             </div>
             <input ref={file} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp"
               onChange={pick} hidden />
@@ -217,9 +231,9 @@ export default function BrandKit({
           {logo
             ? <img src={logo} alt="" className="kc-logo" />
             : <span className="kc-logo kc-none">logo</span>}
-          <span className="kc-chip" style={{ borderColor: pal.onPrimary }}>Technical SEO Audit</span>
+          <span className="kc-chip" style={{ borderColor: pal.onPrimary }}>{DEFAULT_KIND}</span>
           <h4 style={{ fontFamily: `'${id.type.display}', Georgia, serif` }}>
-            Technical SEO Audit, Q3 2026
+            {brand.name} {DEFAULT_KIND}
           </h4>
           <p className="kc-sub" style={{ fontFamily: `'${id.type.body}', Arial, sans-serif` }}>
             {id.legal_name ?? brand.name}{brand.domain ? `  ·  ${brand.domain}` : ''}

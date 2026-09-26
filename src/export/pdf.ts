@@ -3,6 +3,7 @@ import { BAND_LABEL } from '../lib/score'
 import { fontHref, identityOf, reportPalette } from '../lib/brand'
 import { sectionsOf, type SectionKey } from '../lib/sections'
 import { clientFindings, depthOf, type DepthSpec } from '../lib/depth'
+import { kindOf } from '../lib/kind'
 
 /**
  * PDF export. The browser's own print engine does the rendering, so there is
@@ -302,7 +303,7 @@ export function buildPrintDocument(
 
   const cover = `${brandCss}<div class="page"><div class="pg cover">
     ${logo}
-    <div class="chip">Technical SEO Audit</div>
+    <div class="chip">${esc(kindOf(audit))}</div>
     <h1 class="cvtitle">${esc(audit.title)}</h1>
     <p class="cvsub">${esc(id.legal_name ?? brand.name)}${brand.domain ? ` &nbsp;·&nbsp; ${esc(brand.domain)}` : ''}</p>
     ${id.slogan ? `<p class="cvslogan">${esc(id.slogan)}</p>` : ''}

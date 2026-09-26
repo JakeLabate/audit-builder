@@ -200,6 +200,11 @@ export async function uploadBrandAsset(
 }
 
 export async function evidenceUrl(path: string): Promise<string | null> {
+  // A brand logo is often already hosted: a CDN, a press kit, a design system.
+  // Requiring an upload for something that has a stable URL is friction for no
+  // gain, and it is the only way an API or MCP client can set one at all,
+  // since neither can put bytes in the bucket.
+  if (/^https?:\/\//i.test(path)) return path
   const { data, error } = await supabase.storage.from('evidence').createSignedUrl(path, 3600)
   if (error) return null
   return data.signedUrl
