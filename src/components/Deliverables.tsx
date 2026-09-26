@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { deleteExport, listExports, type ExportRow } from '../lib/exports'
+import { LINK_DAYS, deleteExport, documentLink, listExports, type ExportRow } from '../lib/exports'
 
 /**
  * Every export this audit has produced, with both links.
@@ -27,9 +27,9 @@ export default function Deliverables({ auditId, reload }: { auditId: string; rel
     } catch { setErr('Your browser would not let the page copy. Use the link instead.') }
   }
 
-  const drop = async (id: string) => {
-    if (!confirm('Remove this export from the list? The files themselves stay where they are.')) return
-    try { await deleteExport(id); void load() } catch (e) { setErr((e as Error).message) }
+  const drop = async (r: ExportRow) => {
+    if (!confirm('Delete this export? The document is removed from storage and any link to it stops working. The register in your Drive is untouched.')) return
+    try { await deleteExport(r.id, r.pdf_path); void load() } catch (e) { setErr((e as Error).message) }
   }
 
   if (rows && rows.length === 0) {
@@ -46,6 +46,10 @@ export default function Deliverables({ auditId, reload }: { auditId: string; rel
   return (
     <section className="dlv">
       <h3>Deliverables</h3>
+      <p className="dlv-note">
+        Document links are signed and last {LINK_DAYS} days. Copy one again whenever you
+        need a fresh one. The file itself is private to this workspace.
+      </p>
       {err && <p className="dlv-err">{err}</p>}
       {!rows ? <p className="dlv-none">Loading</p> : (
         <ol className="dlv-list">
@@ -63,13 +67,17 @@ export default function Deliverables({ auditId, reload }: { auditId: string; rel
               </div>
 
               <div className="dlv-links">
-                <Artifact label="Document" kind="pdf" url={r.pdf_url}
-                  copied={copied === `${r.id}-pdf`} onCopy={() => copy(`${r.id}-pdf`, r.pdf_url!)} />
-                <Artifact label="Register" kind="sheet" url={r.sheet_url}
-                  copied={copied === `${r.id}-sheet`} onCopy={() => copy(`${r.id}-sheet`, r.sheet_url!)} />
+                <Artifact label="Document" kind="pdf" has={!!r.pdf_path}
+                  copied={copied === `${r.id}-pdf`}
+                  onCopy={async () => copy(`${r.id}-pdf`, await documentLink(r.pdf_path!))}
+                  onOpen={async () => window.open(await documentLink(r.pdf_path!), '_blank', 'noopener')} />
+                <Artifact label="Register" kind="sheet" has={!!r.sheet_url}
+                  copied={copied === `${r.id}-sheet`}
+                  onCopy={() => copy(`${r.id}-sheet`, r.sheet_url!)}
+                  onOpen={() => window.open(r.sheet_url!, '_blank', 'noopener')} />
               </div>
 
-              <button className="dlv-x" onClick={() => drop(r.id)}
+              <button className="dlv-x" onClick={() => drop(r)}
                 aria-label="Remove this export from the list">×</button>
             </li>
           ))}
@@ -79,11 +87,11 @@ export default function Deliverables({ auditId, reload }: { auditId: string; rel
   )
 }
 
-function Artifact({ label, kind, url, copied, onCopy }: {
-  label: string; kind: 'pdf' | 'sheet'; url: string | null
-  copied: boolean; onCopy: () => void
+function Artifact({ label, kind, has, copied, onCopy, onOpen }: {
+  label: string; kind: 'pdf' | 'sheet'; has: boolean
+  copied: boolean; onCopy: () => void; onOpen: () => void
 }) {
-  if (!url) {
+  if (!has) {
     return (
       <div className={`dlv-a off ${kind}`}>
         <span className="dlv-a-l">{label}</span>
@@ -94,7 +102,7 @@ function Artifact({ label, kind, url, copied, onCopy }: {
   return (
     <div className={`dlv-a ${kind}`}>
       <span className="dlv-a-l">{label}</span>
-      <a href={url} target="_blank" rel="noopener noreferrer" className="dlv-a-open">Open</a>
+      <button className="dlv-a-open" onClick={onOpen}>Open</button>
       <button className="dlv-a-copy" onClick={onCopy}>{copied ? 'Copied' : 'Copy link'}</button>
     </div>
   )

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { LINK_DAYS, documentLink } from '../lib/exports'
 import { buildStandaloneDocument } from '../export/pdf'
 import { exportFilename, recordExport, renderPdf } from '../lib/exports'
 import { DEFAULT_KIND, KIND_SUGGESTIONS } from '../lib/kind'
@@ -147,7 +148,7 @@ export default function ExportModal({
     // A rendered PDF is the only version of the document that has a URL. If
     // the renderer is unreachable the export still has to produce something,
     // so it falls back to the print dialog rather than failing outright.
-    let pdf: { path: string; url: string } | null = null
+    let pdf: { path: string } | null = null
     setStep('Printing the document')
     try {
       pdf = await renderPdf(audit.id, buildStandaloneDocument(body, PRINT_CSS, audit.title), name)
@@ -161,7 +162,7 @@ export default function ExportModal({
       try {
         await recordExport({
           audit: live, brand, sheet_url: sheetUrl,
-          pdf_path: pdf?.path ?? null, pdf_url: pdf?.url ?? null,
+          pdf_path: pdf?.path ?? null, pdf_url: null,
           finding_count: clientFindings(findings).length,
         })
         onExported()
@@ -172,7 +173,7 @@ export default function ExportModal({
 
     setStep(null)
     setBusy(false)
-    setDone({ pdf: pdf?.url ?? null, sheet: sheetUrl })
+    setDone({ pdf: pdf?.path ?? null, sheet: sheetUrl })
     if (sheetUrl && pdf) say('Export ready. Both links are on the audit.')
   }, [audit, sections, cols, kind, brand, findings, byline, logoUrl, sheetsReady, say, onExported])
 
@@ -374,10 +375,13 @@ export default function ExportModal({
               <span>Both links are saved on the audit. They do not expire.</span>
             </div>
             <div className="xdone-links">
-              <Got label="Document" hint="Branded PDF, one page per finding" url={done.pdf}
-                copied={copied === 'd'} onCopy={() => copy('d', done.pdf!)} />
+              <Got label="Document" hint={`Branded PDF. Links last ${LINK_DAYS} days.`}
+                url={done.pdf} copied={copied === 'd'}
+                onCopy={async () => copy('d', await documentLink(done.pdf!))}
+                onOpen={async () => window.open(await documentLink(done.pdf!), '_blank', 'noopener')} />
               <Got label="Register" hint="Google Sheet, every field" url={done.sheet}
-                copied={copied === 's'} onCopy={() => copy('s', done.sheet!)} />
+                copied={copied === 's'} onCopy={() => copy('s', done.sheet!)}
+                onOpen={() => window.open(done.sheet!, '_blank', 'noopener')} />
             </div>
           </div>
         )}
@@ -407,8 +411,9 @@ export default function ExportModal({
 }
 
 /** One produced artifact, with the two things you actually do with it. */
-function Got({ label, hint, url, copied, onCopy }: {
-  label: string; hint: string; url: string | null; copied: boolean; onCopy: () => void
+function Got({ label, hint, url, copied, onCopy, onOpen }: {
+  label: string; hint: string; url: string | null; copied: boolean
+  onCopy: () => void; onOpen: () => void
 }) {
   if (!url) {
     return (
@@ -423,7 +428,7 @@ function Got({ label, hint, url, copied, onCopy }: {
         <b>{label}</b>
         <span>{hint}</span>
       </div>
-      <a className="btn sm" href={url} target="_blank" rel="noopener noreferrer">Open</a>
+      <button className="btn sm" onClick={onOpen}>Open</button>
       <button className="btn sm pri" onClick={onCopy}>{copied ? 'Copied' : 'Copy link'}</button>
     </div>
   )

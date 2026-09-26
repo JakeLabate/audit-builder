@@ -39,11 +39,10 @@ export async function handleRender(req: Request, env: RenderEnv): Promise<Respon
   const path = `${org}/${body.audit_id}/${crypto.randomUUID()}/${name}.pdf`
   await putObject(env, path, pdf)
 
-  return Response.json({
-    path,
-    url: `${env.SUPABASE_URL}/storage/v1/object/public/audit-docs/${path}`,
-    bytes: pdf.byteLength,
-  })
+  // A path, not a URL. The bucket is private, so a link is signed by the app
+  // when somebody actually asks to share one, and lasts as long as that share
+  // needs rather than for ever.
+  return Response.json({ path, bytes: pdf.byteLength })
 }
 
 /** The token has to belong to somebody who can already see this audit. */

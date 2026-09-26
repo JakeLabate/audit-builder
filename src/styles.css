@@ -973,9 +973,36 @@ input, select, textarea { font-size: 16px }
   .fb-btn{width:44px;height:44px}
   .stg-chip{min-height:36px}
   .fld input,.fld select,.fld textarea,.listbar input,
-  .keymint input,.rs-kind input{min-height:44px}
+  .keymint input,.keymint select,.keytab select,.rs-kind input{min-height:44px}
+  .topnav-l{min-height:40px;display:inline-flex;align-items:center}
   .dlv-a-open,.dlv-a-copy{min-height:40px;display:inline-flex;align-items:center;padding:0 12px}
   /* Checkboxes are drawn at 13px by the browser and cannot be tapped. */
   .keyscope input[type=checkbox]{width:20px;height:20px}
   .keyscope{min-height:44px;padding:0 4px}
+}
+
+/* ---- People ------------------------------------------------------------ */
+.rolechip{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
+  padding:2px 7px;border-radius:var(--r);border:1px solid var(--line-2);color:var(--label)}
+.rolechip.owner{border-color:var(--violet);color:var(--violet)}
+.rolechip.editor{border-color:var(--teal);color:var(--teal-d)}
+.keytab .you{font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--teal-d);border:1px solid currentColor;border-radius:2px;padding:1px 5px;margin-left:8px}
+.keytab select{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line-2);
+  border-radius:var(--r);background:var(--surface);color:var(--ink)}
+.keymint select{font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line-2);
+  border-radius:var(--r);background:var(--surface);color:var(--ink)}
+.dlv-note{margin:0 0 12px;font-size:12px;color:var(--muted);line-height:1.5}
+
+.joinbox{max-width:440px;text-align:center;padding:34px 28px;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r)}
+.joinbox h2{font-family:var(--disp);font-size:20px;color:var(--ink);margin:0 0 8px}
+.joinbox p{font-size:14px;line-height:1.6;color:var(--ink-2);margin:0 0 16px}
+
+/* Three nav items do not fit a phone at their desktop labels. */
+.nav-short{display:none}
+@media (max-width:760px){
+  .nav-long{display:none}
+  .nav-short{display:inline}
+  .keytab .you{font-size:10px}
 }

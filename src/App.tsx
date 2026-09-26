@@ -8,6 +8,8 @@ import BrandView from './pages/BrandView'
 import AuditView from './pages/AuditView'
 import ApiPage from './pages/ApiPage'
 import Guide from './pages/Guide'
+import Team from './pages/Team'
+import Join from './pages/Join'
 import Chrome from './components/Chrome'
 
 export default function App() {
@@ -19,12 +21,30 @@ export default function App() {
       setSession(data.session)
       setReady(true)
     })
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      setSession(s)
+      if (!s) return
+      try {
+        const back = sessionStorage.getItem('after-signin')
+        if (back) {
+          sessionStorage.removeItem('after-signin')
+          if (location.pathname !== back) history.replaceState(null, '', back)
+        }
+      } catch { /* private mode */ }
+    })
     return () => sub.subscription.unsubscribe()
   }, [])
 
   if (!ready) return <div className="center"><span className="saving">Loading</span></div>
-  if (!session) return <Login />
+  // An invitation link is the first thing a new person ever opens, and it
+  // arrives before they have an account. Remember where they were going so
+  // signing in does not throw the invitation away.
+  if (!session) {
+    if (location.pathname.startsWith('/join/')) {
+      try { sessionStorage.setItem('after-signin', location.pathname) } catch { /* private mode */ }
+    }
+    return <Login />
+  }
 
   return (
     <Chrome session={session}>
@@ -34,6 +54,8 @@ export default function App() {
         <Route path="/audit/:auditId" element={<AuditView />} />
         <Route path="/guide" element={<Guide />} />
         <Route path="/api" element={<ApiPage />} />
+        <Route path="/team" element={<Team />} />
+        <Route path="/join/:token" element={<Join />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Chrome>

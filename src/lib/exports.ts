@@ -19,6 +19,7 @@ export interface ExportRow {
   created_by: string | null
   sheet_url: string | null
   pdf_path: string | null
+  /** Deprecated: links are signed from pdf_path when one is needed. */
   pdf_url: string | null
   kind: string | null
   title: string | null
@@ -37,15 +38,40 @@ export async function listExports(auditId: string): Promise<ExportRow[]> {
   return (data ?? []) as ExportRow[]
 }
 
-export async function deleteExport(id: string): Promise<void> {
+export async function deleteExport(id: string, pdfPath?: string | null): Promise<void> {
+  // Dropping the row used to leave the PDF in storage for ever, unreferenced
+  // and unreachable, which is the worst of both: you pay for it and cannot
+  // find it. The file goes with the record.
+  if (pdfPath) {
+    const { error } = await supabase.storage.from('audit-docs').remove([pdfPath])
+    if (error) throw new Error(`The document could not be deleted, so the record was kept. ${error.message}`)
+  }
   const { error } = await supabase.from('exports').delete().eq('id', id)
   if (error) throw error
+}
+
+/**
+ * A link to a stored document, signed for a limited time.
+ *
+ * The bucket used to be public, which made a permanent link and also made
+ * every client's audit readable by anyone who ever saw the URL, with no way
+ * to withdraw it. A workspace holding somebody else's client data cannot
+ * carry that default, so the file is private and a link is minted per share.
+ */
+export const LINK_DAYS = 30
+
+export async function documentLink(path: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from('audit-docs').createSignedUrl(path, LINK_DAYS * 24 * 60 * 60)
+  if (error) throw error
+  if (!data?.signedUrl) throw new Error('No link came back for that document.')
+  return data.signedUrl
 }
 
 /** Headless Chrome prints the document and hands back a stored, linkable PDF. */
 export async function renderPdf(
   auditId: string, html: string, filename: string,
-): Promise<{ path: string; url: string }> {
+): Promise<{ path: string }> {
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
   if (!token) throw new Error('Your session expired. Sign in again and re-run the export.')
@@ -55,9 +81,9 @@ export async function renderPdf(
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ audit_id: auditId, html, filename }),
   })
-  const body = (await res.json().catch(() => ({}))) as { url?: string; path?: string; error?: string }
-  if (!res.ok || !body.url) throw new Error(body.error ?? `The renderer returned ${res.status}.`)
-  return { path: body.path!, url: body.url }
+  const body = (await res.json().catch(() => ({}))) as { path?: string; error?: string }
+  if (!res.ok || !body.path) throw new Error(body.error ?? `The renderer returned ${res.status}.`)
+  return { path: body.path }
 }
 
 export async function recordExport(row: {
