@@ -8,6 +8,9 @@ export const PRINT_CSS = `
 @page{size:210mm 297mm;margin:0}
 :root{
   --ink:#191A3E; --ink2:#2B2C63; --teal:#0E8C8B; --teal-d:#0A6C6B;
+  /* Overridden per brand by the block buildPrintDocument injects. */
+  --brand:#191A3E; --brand-on:#fff; --brand-ink:#12132B;
+  --brand-accent:#0E8C8B; --brand-wash:#F2F4F3; --brand-rule:#D7DCD9;
   --paper:#fff; --wash:#F4F4F9; --line:#DFDFEA; --muted:#6C6D91; --amber:#A9720C; --crim:#8A1C2B;
   --disp:'Space Grotesk',Arial,sans-serif; --body:'IBM Plex Sans',Arial,sans-serif;
   --mono:'IBM Plex Mono',monospace;
