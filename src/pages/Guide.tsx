@@ -1,4 +1,14 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import Flipbook from '../components/Flipbook'
+import RegisterPreview from '../components/RegisterPreview'
+import { PRINT_CSS } from '../export/print.css'
+
+interface Sample {
+  brand: string; title: string; kind: string | null
+  head: string; pages: string[]
+  register: { headers: string[]; notes: string[]; widths: number[]; wrap: boolean[]; rows: string[][] }
+}
 
 /**
  * How the app works.
@@ -8,6 +18,17 @@ import { Link } from 'react-router-dom'
  * constraint you do not understand just reads as an obstacle.
  */
 export default function Guide() {
+  // Fetched rather than bundled: a fifteen page report is dead weight in the
+  // main chunk for everyone who never opens this page.
+  const [sample, setSample] = useState<Sample | null>(null)
+  const [sampleErr, setSampleErr] = useState(false)
+  useEffect(() => {
+    fetch('/sample-report.json')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(setSample)
+      .catch(() => setSampleErr(true))
+  }, [])
+
   return (
     <div className="page-wrap doc">
       <header className="doc-hd">
@@ -126,6 +147,32 @@ export default function Guide() {
           the least important material is dropped and the page says so rather than silently
           truncating.
         </p>
+
+        <h3 className="doc-h3">The document</h3>
+        <p className="doc-p">
+          This is a real one, not a mockup: the sample audit in your workspace, run through the
+          same exporter. Turn the pages with the arrows, or the arrow keys.
+        </p>
+        {sample && (
+          <Flipbook
+            pages={sample.pages}
+            css={PRINT_CSS + sample.head.replace(/<\/?style[^>]*>/g, '')}
+            label={`${sample.brand}, ${sample.kind ?? 'audit'}`}
+          />
+        )}
+        {!sample && !sampleErr && <div className="fb-load">Loading the sample report</div>}
+        {sampleErr && (
+          <p className="doc-none">
+            The sample report could not be loaded. Open the sample audit and press Export to
+            see the real thing instead.
+          </p>
+        )}
+
+        <h3 className="doc-h3">The register</h3>
+        <p className="doc-p">
+          The same audit, every field of it. The document argues; this one holds the record.
+        </p>
+        {sample && <RegisterPreview reg={sample.register} />}
       </section>
 
       <section className="doc-s">

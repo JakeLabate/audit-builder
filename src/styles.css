@@ -799,3 +799,80 @@ input, select, textarea { font-size: 16px }
    Let the table scroll inside its own box rather than the whole page. */
 .keytab-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .keytab{min-width:460px}
+
+/* ---- Flipbook ----------------------------------------------------------
+   The turn is two faces rotating about the same edge, not a nested leaf, so
+   every page stays a stable sibling and keeps its already painted iframe. */
+.fb{margin:16px 0 8px;padding:0}
+/* The document is the point of this section, so let it out of the text column.
+   A spread needs about 1100px; inside 760px it would always be one page up. */
+@media (min-width:860px){
+  .fb,.rp{width:min(94vw,1200px);margin-left:50%;transform:translateX(-50%)}
+}
+.fb-stage{display:flex;justify-content:center;padding:16px 10px;background:var(--wash);
+  border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.fb-book{position:relative;perspective:2600px}
+.fb-gutter{position:absolute;inset:0;background:#fff;
+  box-shadow:0 1px 3px rgba(25,26,62,.16),0 10px 30px rgba(25,26,62,.08)}
+.fb-book:not(.one) .fb-gutter{background:linear-gradient(90deg,#fff 0 50%,
+  rgba(25,26,62,.10) 50%,rgba(25,26,62,0) calc(50% + 10px),#fff calc(50% + 10px) 100%)}
+
+.fb-page{position:absolute;top:0;overflow:hidden;background:#fff;
+  backface-visibility:hidden;transform-style:preserve-3d}
+.fb-frame{border:0;display:block;background:#fff;pointer-events:none}
+
+.fb-page.r-hidden{opacity:0;pointer-events:none;left:0;z-index:0}
+.fb-page.r-left{left:0;z-index:1}
+.fb-page.r-right{left:var(--pw);z-index:1}
+.fb-book.one .fb-page.r-left{left:0}
+
+/* Turning forward: the old right page swings across to become the new left. */
+.fb-book.turning.next .fb-page.r-away{left:var(--pw);z-index:4;transform-origin:left center;
+  animation:fb-away .62s cubic-bezier(.36,.06,.24,1) forwards;
+  box-shadow:0 2px 20px rgba(25,26,62,.24)}
+.fb-book.turning.next .fb-page.r-incoming{left:var(--pw);z-index:3;transform-origin:left center;
+  animation:fb-in .62s cubic-bezier(.36,.06,.24,1) forwards}
+@keyframes fb-away{from{transform:rotateY(0)}to{transform:rotateY(-180deg)}}
+@keyframes fb-in{from{transform:rotateY(180deg)}to{transform:rotateY(0)}}
+
+/* And backward, about the other edge. */
+.fb-book.turning.prev .fb-page.r-away{left:0;z-index:4;transform-origin:right center;
+  animation:fb-away-b .62s cubic-bezier(.36,.06,.24,1) forwards;
+  box-shadow:0 2px 20px rgba(25,26,62,.24)}
+.fb-book.turning.prev .fb-page.r-incoming{left:0;z-index:3;transform-origin:right center;
+  animation:fb-in-b .62s cubic-bezier(.36,.06,.24,1) forwards}
+@keyframes fb-away-b{from{transform:rotateY(0)}to{transform:rotateY(180deg)}}
+@keyframes fb-in-b{from{transform:rotateY(-180deg)}to{transform:rotateY(0)}}
+
+@media (prefers-reduced-motion:reduce){
+  .fb-page{animation:none !important}
+  .fb-page.r-away{opacity:0}
+}
+
+.fb-bar{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:10px}
+.fb-btn{width:34px;height:34px;font-size:19px;line-height:1;color:var(--ink);
+  background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);cursor:pointer}
+.fb-btn:hover:not(:disabled){border-color:var(--ink);background:var(--wash)}
+.fb-btn:disabled{opacity:.3;cursor:default}
+.fb-count{font-family:var(--mono);font-size:11.5px;color:var(--muted);min-width:172px;text-align:center}
+.fb-load{padding:40px;text-align:center;font-size:13px;color:var(--muted);
+  background:var(--wash);border:1px solid var(--line);border-radius:var(--r)}
+
+/* ---- Register preview --------------------------------------------------- */
+.rp{margin:16px 0 8px}
+.rp-scroll{overflow-x:auto;overflow-y:hidden;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--surface);-webkit-overflow-scrolling:touch}
+.rp-tab{border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.rp-tab th{position:sticky;top:0;text-align:left;font-size:10.5px;font-weight:600;
+  color:#fff;background:var(--ink);padding:7px 9px;white-space:nowrap;
+  border-right:1px solid rgba(255,255,255,.14)}
+.rp-note td{font-size:9.5px;line-height:1.35;font-style:italic;color:#6B5B72;
+  background:var(--wash);padding:6px 9px;vertical-align:top;
+  border-right:1px solid var(--line);border-bottom:1px solid var(--line-2)}
+.rp-tab tbody td{padding:7px 9px;vertical-align:top;color:var(--ink-2);
+  border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.rp-tab tbody td span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;
+  overflow:hidden}
+.rp-tab tbody td:not(.w) span{-webkit-line-clamp:1;white-space:nowrap}
+.rp-tab tbody tr:nth-child(even) td{background:#FBFBFD}
+.rp-hint{margin:8px 0 0;font-size:11.5px;color:var(--muted)}
