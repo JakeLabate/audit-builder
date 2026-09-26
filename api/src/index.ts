@@ -10,7 +10,7 @@
  */
 import { ApiError, rpc, type Env } from './db'
 import { audits, brands, examples, exports_, findings, schema, type Ctx } from './resources'
-import { handleMcp } from './mcp'
+import { handleMcp, TOOLS as MCP_TOOLS } from './mcp'
 import { handleRender } from './render'
 
 const CORS = {
@@ -144,6 +144,11 @@ const index = (origin: string) => ({
   name: 'AuditBuilder API',
   auth: 'Authorization: Bearer ab_live_...',
   mcp: `${origin}/mcp`,
+  render: `${origin}/render`,
+  scopes: ['read', 'write'],
+  // Listed here, unauthenticated, so the docs page in the app is generated
+  // from the worker rather than written alongside it and left to drift.
+  tools: MCP_TOOLS.map((t) => ({ name: t.name, description: t.description })),
   routes: [
     'GET    /v1/schema',
     'GET    /v1/brands',

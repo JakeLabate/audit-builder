@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 export default function Chrome({ session, children }: { session: Session; children: ReactNode }) {
@@ -11,6 +11,14 @@ export default function Chrome({ session, children }: { session: Session; childr
         <Link className="brandmark" to="/">
           AuditBuilder<span>Findings</span>
         </Link>
+        <nav className="topnav">
+          <NavLink to="/guide" className={({ isActive }) => 'topnav-l' + (isActive ? ' on' : '')}>
+            How it works
+          </NavLink>
+          <NavLink to="/api" className={({ isActive }) => 'topnav-l' + (isActive ? ' on' : '')}>
+            API and MCP
+          </NavLink>
+        </nav>
         <span className="grow" />
         <div className="who">
           {meta.avatar_url && <img src={meta.avatar_url} alt="" />}

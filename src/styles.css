@@ -707,3 +707,95 @@ input, select, textarea { font-size: 16px }
    no sample at all. */
 .modetag.sample{background:var(--amber);color:#fff;border-color:transparent}
 .samplenote{margin:6px 0 0;font-size:11.5px;line-height:1.45;color:var(--muted)}
+
+/* ---- Top nav ----------------------------------------------------------- */
+.topnav{display:flex;gap:4px;margin-left:22px}
+.topnav-l{font-size:13px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:var(--r)}
+.topnav-l:hover{color:var(--ink);background:var(--wash)}
+.topnav-l.on{color:var(--ink);background:var(--wash);font-weight:600}
+@media (max-width:640px){.topnav{margin-left:10px}.topnav-l{padding:5px 7px;font-size:12px}}
+
+/* ---- Documentation pages ----------------------------------------------- */
+.doc{max-width:760px;margin:0 auto;padding:34px 20px 80px}
+.doc-hd{margin-bottom:34px;padding-bottom:22px;border-bottom:2px solid var(--ink)}
+.doc-hd h1{font-family:var(--disp);font-size:31px;line-height:1.15;margin:0 0 10px;color:var(--ink)}
+.doc-hd p{font-size:15px;line-height:1.6;color:var(--ink-2);margin:0}
+.doc-s{margin-bottom:38px}
+.doc-s h2{font-family:var(--disp);font-size:19px;margin:0 0 12px;color:var(--ink)}
+.doc-h3{font-family:var(--disp);font-size:14px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--label);margin:26px 0 10px}
+.doc-p{font-size:14.5px;line-height:1.68;color:var(--ink-2);margin:0 0 13px}
+.doc-p code,.doc-s code{font-family:var(--mono);font-size:12.5px;background:var(--wash);
+  padding:1px 5px;border-radius:var(--r);color:var(--ink)}
+.doc-ol{margin:0 0 13px;padding-left:22px}
+.doc-ol li{font-size:14.5px;line-height:1.68;color:var(--ink-2);margin-bottom:10px}
+.doc-none{font-size:13px;color:var(--muted)}
+.doc-end{margin-top:44px;padding-top:26px;border-top:1px solid var(--line)}
+
+.formula-box{background:var(--wash);border-left:3px solid var(--teal-d);padding:14px 16px;
+  margin:0 0 13px;overflow-x:auto}
+.formula-box code{font-family:var(--mono);font-size:12.5px;line-height:1.7;background:none;
+  padding:0;color:var(--ink);white-space:pre}
+
+.bandgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:16px}
+@media (max-width:640px){.bandgrid{grid-template-columns:repeat(2,1fr)}}
+.bandgrid>div{padding:11px 12px;background:var(--wash);border-radius:var(--r);
+  border-left:3px solid var(--line-2)}
+.bandgrid>div:nth-child(1){border-left-color:var(--crim)}
+.bandgrid>div:nth-child(2){border-left-color:var(--amber)}
+.bandgrid>div:nth-child(3){border-left-color:var(--teal)}
+.bandgrid>div:nth-child(4){border-left-color:var(--line-2)}
+.bandgrid b{display:block;font-family:var(--disp);font-size:14px;color:var(--ink)}
+.bandgrid span{display:block;font-family:var(--mono);font-size:10.5px;color:var(--muted);margin:2px 0}
+.bandgrid em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-2)}
+
+/* ---- Keys -------------------------------------------------------------- */
+.keymint{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:16px 0}
+.keymint input[type=text],.keymint input:not([type]){flex:1;min-width:210px;padding:8px 10px;
+  font:inherit;font-size:14px;border:1px solid var(--line-2);border-radius:var(--r)}
+.keyscope{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--ink-2);
+  font-family:var(--mono)}
+.keynew{margin:14px 0;padding:14px 16px;background:#FFF8E8;border:1px solid var(--amber);
+  border-radius:var(--r)}
+.keynew>b{display:block;font-size:13px;color:#7A5206;margin-bottom:9px}
+.keynew-row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.keynew-row code{flex:1;font-family:var(--mono);font-size:12px;word-break:break-all;
+  background:var(--surface);padding:8px 10px;border-radius:var(--r);border:1px solid var(--line)}
+.keytab{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}
+.keytab th{text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--label);padding:0 10px 7px 0;border-bottom:1px solid var(--line)}
+.keytab td{padding:9px 10px 9px 0;border-bottom:1px solid var(--line);color:var(--ink-2)}
+.keytab tr.off{opacity:.45}
+.keytab .dim{color:var(--muted);font-size:12px}
+
+/* ---- Snippets and route lists ------------------------------------------ */
+.snip{display:flex;align-items:center;gap:10px;margin:12px 0;background:var(--wash);
+  border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.snip.block{align-items:flex-start}
+.snip-l{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--label);
+  min-width:96px;padding-top:2px}
+.snip pre{flex:1;margin:0;overflow-x:auto}
+.snip code{font-family:var(--mono);font-size:12px;color:var(--ink);white-space:pre;background:none;padding:0}
+@media (max-width:640px){.snip,.snip.block{flex-direction:column;align-items:stretch}.snip-l{min-width:0}}
+
+.routelist{list-style:none;margin:0;padding:0}
+.routelist li{display:flex;align-items:baseline;gap:10px;padding:6px 0;
+  border-bottom:1px solid var(--line)}
+.routelist code{font-family:var(--mono);font-size:12.5px;color:var(--ink-2);background:none;padding:0}
+.verb{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.04em;
+  min-width:52px;padding:2px 6px;border-radius:var(--r);text-align:center;color:#fff}
+.verb.get{background:var(--teal-d)}
+.verb.post{background:var(--violet)}
+.verb.patch{background:var(--amber)}
+.verb.delete{background:var(--crim)}
+
+.toollist{margin:0}
+.toollist>div{padding:9px 0;border-bottom:1px solid var(--line)}
+.toollist dt code{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--ink);
+  background:none;padding:0}
+.toollist dd{margin:3px 0 0;font-size:13px;line-height:1.55;color:var(--ink-2)}
+
+/* The key table carries a full length prefix, which is wider than a phone.
+   Let the table scroll inside its own box rather than the whole page. */
+.keytab-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.keytab{min-width:460px}

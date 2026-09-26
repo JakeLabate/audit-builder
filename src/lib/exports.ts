@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { RENDER_URL } from './apibase'
 import type { Audit, Brand } from './types'
 
 /**
@@ -27,7 +28,6 @@ export interface ExportRow {
   note: string | null
 }
 
-const RENDER_URL = 'https://audit-api.jake-a-labate.workers.dev/render'
 
 export async function listExports(auditId: string): Promise<ExportRow[]> {
   const { data, error } = await supabase

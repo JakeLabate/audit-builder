@@ -6,6 +6,8 @@ import Login from './pages/Login'
 import Brands from './pages/Brands'
 import BrandView from './pages/BrandView'
 import AuditView from './pages/AuditView'
+import ApiPage from './pages/ApiPage'
+import Guide from './pages/Guide'
 import Chrome from './components/Chrome'
 
 export default function App() {
@@ -30,6 +32,8 @@ export default function App() {
         <Route path="/" element={<Brands />} />
         <Route path="/brand/:brandId" element={<BrandView />} />
         <Route path="/audit/:auditId" element={<AuditView />} />
+        <Route path="/guide" element={<Guide />} />
+        <Route path="/api" element={<ApiPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Chrome>
