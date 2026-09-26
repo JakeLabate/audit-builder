@@ -5,3 +5,4 @@ dist
 .DS_Store
 *.log
 tsconfig.tsbuildinfo
+api/node_modules

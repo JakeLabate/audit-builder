@@ -1,0 +1,10 @@
+name = "audit-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-04"
+
+[vars]
+MAX_PAGE = "200"
+
+# Secrets, set once with `wrangler secret put <NAME>`:
+#   SUPABASE_URL                https://vvekkbboqqkxnlpmxazh.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY   Supabase > Project settings > API
