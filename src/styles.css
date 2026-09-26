@@ -812,9 +812,12 @@ input, select, textarea { font-size: 16px }
 .fb-book:not(.one) .fb-gutter{background:linear-gradient(90deg,#fff 0 50%,
   rgba(25,26,62,.10) 50%,rgba(25,26,62,0) calc(50% + 10px),#fff calc(50% + 10px) 100%)}
 
-.fb-page{position:absolute;top:0;overflow:hidden;background:#fff;
-  backface-visibility:hidden;transform-style:preserve-3d;contain:paint}
-.fb-frame{border:0;display:block;background:#fff;pointer-events:none}
+/* backface-visibility and preserve-3d put an element into a 3D rendering
+   context, which is not free. Only the two faces actually turning need one,
+   so they are set on the armed faces rather than on all fifteen pages. */
+.fb-page{position:absolute;top:0;overflow:hidden;background:#fff;contain:paint}
+.fb-frame{border:0;display:block;background:#fff;pointer-events:none;
+  user-select:none;-webkit-user-drag:none}
 
 /* visibility, not opacity. An opacity:0 iframe still paints every frame, so
    all fifteen pages were being rasterised during a turn and it stuttered. */
@@ -823,19 +826,21 @@ input, select, textarea { font-size: 16px }
    it the first turn after load pays for layer allocation inside its own first
    frame and drops two or three, which is exactly the part a reader notices.
    Two layers is a cheap price; promoting all fifteen would not be. */
-.fb-page.r-left{left:0;z-index:1;will-change:transform}
-.fb-page.r-right{left:var(--pw);z-index:1;will-change:transform}
+.fb-page.r-left{left:0;z-index:1}
+.fb-page.r-right{left:var(--pw);z-index:1}
 .fb-book.one .fb-page.r-left{left:0}
 
 /* Armed: faces placed and promoted, one frame before anything moves. */
+.fb-book.arm .fb-page.r-away,.fb-book.arm .fb-page.r-incoming{
+  backface-visibility:hidden;transform-style:preserve-3d;will-change:transform}
 .fb-book.arm.next .fb-page.r-away{left:var(--pw);z-index:4;transform-origin:left center;
-  transform:rotateY(0);will-change:transform;box-shadow:0 2px 20px rgba(25,26,62,.24)}
+  transform:rotateY(0);box-shadow:0 2px 20px rgba(25,26,62,.24)}
 .fb-book.arm.next .fb-page.r-incoming{left:var(--pw);z-index:3;transform-origin:left center;
-  transform:rotateY(180deg);will-change:transform}
+  transform:rotateY(180deg)}
 .fb-book.arm.prev .fb-page.r-away{left:0;z-index:4;transform-origin:right center;
-  transform:rotateY(0);will-change:transform;box-shadow:0 2px 20px rgba(25,26,62,.24)}
+  transform:rotateY(0);box-shadow:0 2px 20px rgba(25,26,62,.24)}
 .fb-book.arm.prev .fb-page.r-incoming{left:0;z-index:3;transform-origin:right center;
-  transform:rotateY(-180deg);will-change:transform}
+  transform:rotateY(-180deg)}
 
 /* Turning forward: the old right page swings across to become the new left. */
 .fb-book.turning.next .fb-page.r-away{
@@ -895,3 +900,82 @@ input, select, textarea { font-size: 16px }
 .rp-tab tbody td:not(.w) span{-webkit-line-clamp:1;white-space:nowrap}
 .rp-tab tbody tr:nth-child(even) td{background:#FBFBFD}
 .rp-hint{margin:8px 0 0;font-size:11.5px;color:var(--muted)}
+
+/* ======================================================================
+   Phones.
+
+   The header was the worst of it: brandmark, two nav links and the signed
+   in user all on one 54px row, which needs about 450px and pushed every
+   page 58px sideways. Everything below is measured against a 390px
+   viewport, which is the narrow end of what people actually carry.
+   ====================================================================== */
+@media (max-width:760px){
+  .top{gap:10px;padding:0 14px;height:52px}
+
+  /* "Findings" under the wordmark is decoration, and it costs 70px. */
+  .brandmark{font-size:15px}
+  .brandmark span{display:none}
+
+  /* The name is already known to the person reading it. The avatar keeps
+     the account visible; Sign out keeps working. */
+  .who>span{display:none}
+  .who{gap:7px}
+
+  .topnav{margin-left:auto;gap:2px}
+  .topnav-l{padding:5px 8px;font-size:12.5px}
+
+  /* Breadcrumbs: the trail matters less than the title on a phone, and
+     three links plus a title cannot share 390px. */
+  .crumbs{font-size:12.5px;gap:5px;overflow:hidden}
+  .crumbs a:first-of-type,.crumbs span:first-of-type{display:none}
+  .crumbs b{max-width:38vw}
+
+  .wrap{padding:20px 14px 64px}
+  h1.page{font-size:22px}
+
+  /* A findings list and an editor cannot share a viewport this narrow, so
+     the list becomes a band at the top rather than a column beside. */
+  .list{border-right:0;border-bottom:1px solid var(--line);max-height:42vh}
+  .pane{padding:18px 14px 70px}
+
+  .grp{padding:16px 15px 6px}
+  .grp>h4{font-size:17px}
+  .ttl{font-size:21px}
+
+  .scorebox .terms{grid-template-columns:repeat(2,1fr)}
+  .scorebox .terms>div:nth-child(odd){border-left:0}
+
+  /* Documentation pages */
+  .doc{padding:26px 16px 64px}
+  .doc-hd h1{font-size:25px}
+  .doc-s h2{font-size:17px}
+
+  /* Micro labels set at 9.5px are legible on a desktop at arm's length and
+     not on a phone. Nothing below 11px on a small screen. */
+  .card .meta,.frow .ref,.pill,.stg-chip,.fld.required label::after,
+  .keytab th,.snip-l,.doc-h3,.dlv-when span,.stg,.stg span,
+  .bandgrid span,.bandgrid em,.scorebox .terms .k,.scorebox .l,
+  .rp-note td,.idline,.stagestrip .stg,.issue b,.lastcheck>b{font-size:11px}
+  .fb-count,.rp-hint,.samplenote,.dlv-a-l,.doc-none,.dlv-by{font-size:11.5px}
+
+  /* A link in a 52px bar is only as tappable as its own box. */
+  .brandmark{display:inline-flex;align-items:center;min-height:40px}
+  .crumbs a,.crumbs b{padding:9px 0}
+}
+
+/* Touch targets. A 35px button is comfortable with a mouse and a miss with
+   a thumb; 44px is the floor both Apple and Google publish. Keyed off the
+   pointer rather than the width, so a tablet gets it and a small window on
+   a laptop does not. */
+@media (pointer:coarse){
+  .btn{min-height:44px;padding:10px 15px}
+  .btn.sm{min-height:40px;padding:8px 12px}
+  .fb-btn{width:44px;height:44px}
+  .stg-chip{min-height:36px}
+  .fld input,.fld select,.fld textarea,.listbar input,
+  .keymint input,.rs-kind input{min-height:44px}
+  .dlv-a-open,.dlv-a-copy{min-height:40px;display:inline-flex;align-items:center;padding:0 12px}
+  /* Checkboxes are drawn at 13px by the browser and cannot be tapped. */
+  .keyscope input[type=checkbox]{width:20px;height:20px}
+  .keyscope{min-height:44px;padding:0 4px}
+}

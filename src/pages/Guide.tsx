@@ -2,11 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Flipbook from '../components/Flipbook'
 import RegisterPreview from '../components/RegisterPreview'
-import { PRINT_CSS } from '../export/print.css'
 
 interface Sample {
   brand: string; title: string; kind: string | null
-  head: string; pages: string[]
+  head: string; pages: string[]; images?: string[]
   register: { headers: string[]; notes: string[]; widths: number[]; wrap: boolean[]; rows: string[][] }
 }
 
@@ -153,14 +152,11 @@ export default function Guide() {
           This is a real one, not a mockup: the sample audit in your workspace, run through the
           same exporter. Turn the pages with the arrows, or the arrow keys.
         </p>
-        {sample && (
-          <Flipbook
-            pages={sample.pages}
-            css={PRINT_CSS + sample.head.replace(/<\/?style[^>]*>/g, '')}
-            label={`${sample.brand}, ${sample.kind ?? 'audit'}`}
-          />
+        {sample?.images && (
+          <Flipbook pages={sample.images}
+            label={`${sample.brand}, ${sample.kind ?? 'audit'}`} />
         )}
-        {!sample && !sampleErr && <div className="fb-load">Loading the sample report</div>}
+        {!sample?.images && !sampleErr && <div className="fb-load">Loading the sample report</div>}
         {sampleErr && (
           <p className="doc-none">
             The sample report could not be loaded. Open the sample audit and press Export to

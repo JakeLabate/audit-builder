@@ -1,22 +1,22 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { buildStandaloneDocument } from '../export/pdf'
 
 /**
  * A document you can leaf through.
  *
- * The pages are the real thing: the same HTML the exporter builds, each in its
- * own iframe so the report stylesheet cannot leak into the app and the app
- * cannot leak into the report. The text stays vector and selectable, which
- * images of pages would not be.
+ * The pages are images, rendered from the real export at build time with the
+ * fit pass already applied, so what you turn through is exactly what prints.
  *
- * Every page is mounted once and never moves in the tree. An earlier version
- * created the turning leaf's iframes at the moment the turn began, and they
- * had not painted before the animation finished, so the page turned blank. So
- * each page keeps a stable identity and only its role changes: left, right,
- * the face turning away, the face turning in, or out of sight.
+ * They were live iframes first, which kept the type vector and selectable and
+ * was lovely at rest. The turn was the problem: rotating an iframe in 3D makes
+ * the compositor re-rasterise the whole page every frame, about 1600 by 2250
+ * device pixels per face on a retina screen, and no amount of will-change or
+ * layer promotion fixes that. Frame timings in a headless browser said sixty
+ * a second; on real hardware it stuttered. A static image is one texture the
+ * GPU already holds, so the turn costs nothing.
  *
- * The turn is two independent faces rotating about the same edge rather than
- * one nested leaf. Visually identical, and it lets every page stay a sibling.
+ * Every page is mounted once and never moves in the tree, and the turn is two
+ * faces rotating about a shared edge rather than a nested leaf, so each page
+ * keeps a stable identity and only its role changes.
  */
 
 const PAGE_W = 794   // 210mm at 96dpi
@@ -25,8 +25,8 @@ const TURN_MS = 620
 
 type Role = 'left' | 'right' | 'away' | 'incoming' | 'hidden'
 
-export default function Flipbook({ pages, css, label }: {
-  pages: string[]; css: string; label: string
+export default function Flipbook({ pages, label }: {
+  pages: string[]; label: string
 }) {
   const [spread, setSpread] = useState(0)
   const [turn, setTurn] = useState<{ dir: 'next' | 'prev'; from: number; armed: boolean } | null>(null)
@@ -134,11 +134,11 @@ export default function Flipbook({ pages, css, label }: {
             <div key={i} className={'fb-page r-' + roles[i]}
               style={{ width: w, height: h, ['--pw' as string]: `${w}px` }}
               aria-hidden={roles[i] === 'hidden' || undefined}>
-              <iframe
-                className="fb-frame" srcDoc={frame(html, css, i + 1)} scrolling="no"
-                title={`Page ${i + 1}`} tabIndex={-1}
-                style={{ width: PAGE_W, height: PAGE_H,
-                  transform: `scale(${scale})`, transformOrigin: 'top left' }}
+              <img
+                className="fb-frame" src={html} alt={`Page ${i + 1}`} draggable={false}
+                width={PAGE_W} height={PAGE_H} decoding="async"
+                loading={Math.abs(i - spread * (single ? 1 : 2)) <= 3 ? 'eager' : 'lazy'}
+                style={{ width: w, height: h }}
               />
             </div>
           ))}
@@ -159,16 +159,3 @@ export default function Flipbook({ pages, css, label }: {
     </figure>
   )
 }
-
-/**
- * The same document the printer builds, fit pass and all.
- *
- * Without it a page that carries more than fits simply overflows: the fix
- * steps ran straight through the running footer on three of the fifteen
- * sample pages. buildStandaloneDocument is what the renderer uses, so using it
- * here is also the only way this can honestly claim to show what prints.
- */
-const frame = (html: string, css: string, n: number) =>
-  buildStandaloneDocument(html, `${css}
-  html,body{margin:0;overflow:hidden;background:#fff}
-  .page{page-break-after:auto}`, `Page ${n}`)

@@ -67,3 +67,7 @@ fs.writeFileSync('public/sample-report.json', JSON.stringify({
 }))
 fs.rmSync(out, { recursive: true, force: true })
 console.log(`public/sample-report.json: ${pages.length} pages, ${cols.length} columns`)
+console.log(`Now regenerate public/sample-pages/: the flipbook turns images, not live
+pages, because rotating an iframe in 3D re-rasterises it every frame. Render each
+page of the document above at 1191 x 1685 with the fit pass applied and save as
+WebP at quality 76, then set "images" in the JSON to their paths in order.`)
