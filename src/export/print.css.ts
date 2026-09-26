@@ -18,7 +18,11 @@ export const PRINT_CSS = `
 html,body{width:210mm;background:#fff;color:var(--ink);font-family:var(--body);font-size:10.5pt;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .page{width:210mm;height:297mm;position:relative;overflow:hidden;page-break-after:always}
 .page:last-child{page-break-after:auto}
-.pg{padding:17mm 18mm 15mm;height:100%}
+.pg{padding:17mm 18mm 24mm;height:100%;display:flex;flex-direction:column}
+/* Everything that flows sits in here, so the fit pass has one element to
+   measure and one to scale. Width is compensated when it scales, so the
+   text gets smaller rather than the column getting narrower. */
+.fit{transform-origin:top left;width:100%}
 .hd{display:flex;align-items:center;gap:4mm;margin-bottom:7mm}
 .tag{display:inline-block;font-family:var(--mono);font-size:7.4pt;font-weight:600;letter-spacing:.15em;text-transform:uppercase;padding:2.2mm 3mm;border-radius:1mm;line-height:1;color:#fff}
 .tag.crit{background:var(--crim)} .tag.high{background:var(--amber)}
@@ -54,6 +58,7 @@ html,body{width:210mm;background:#fff;color:var(--ink);font-family:var(--body);f
 .steps{counter-reset:s;margin-top:3mm}
 .steps li{list-style:none;counter-increment:s;position:relative;padding-left:8mm;margin-bottom:3.2mm;font-size:10pt;line-height:1.5;color:var(--ink2)}
 .steps li::before{content:counter(s);position:absolute;left:0;top:.2mm;font-family:var(--mono);font-size:8pt;color:var(--teal-d);border:1px solid var(--teal);border-radius:50%;width:5.2mm;height:5.2mm;display:flex;align-items:center;justify-content:center}
+.clip{display:block;margin-top:1.5mm;font-style:italic;color:var(--muted);font-size:7.6pt}
 .foot{position:absolute;left:18mm;right:18mm;bottom:9mm;display:flex;justify-content:space-between;font-family:var(--mono);font-size:7.4pt;color:var(--muted);letter-spacing:.1em;border-top:1px solid var(--line);padding-top:2.5mm}
 .cover{display:flex;flex-direction:column;justify-content:flex-end}
 .chip{align-self:flex-start;font-family:var(--mono);font-size:8.4pt;font-weight:600;letter-spacing:.14em;text-transform:uppercase;background:var(--ink);color:#fff;padding:2.6mm 3.6mm;border-radius:1mm;margin-bottom:6mm}

@@ -12,28 +12,72 @@ import { sectionsOf, type SectionKey } from '../lib/sections'
  * decision rail on the right, fix across the bottom.
  */
 
+/** Long extracts are the main reason a finding will not fit. Show the head of
+ *  it and say how much was left out, rather than letting it push the fix off
+ *  the page or silently clipping at the page edge. */
+const MAX_EXTRACT_LINES = 14
+function clampExtract(text: string): string {
+  const lines = String(text ?? '').split('\n')
+  if (lines.length <= MAX_EXTRACT_LINES) return esc(text)
+  const rest = lines.length - MAX_EXTRACT_LINES
+  return esc(lines.slice(0, MAX_EXTRACT_LINES).join('\n')) +
+    `\n<span class="clip">${rest} more ${rest === 1 ? 'line' : 'lines'} not shown</span>`
+}
+
 const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
 
 const SEV: Record<string, string> = { P1: 'crit', P2: 'high', P3: 'med', P4: 'med' }
 
+/**
+ * A finding page is one page. Always.
+ *
+ * The fit pass below scales a page down until it fits, but it stops at a floor
+ * rather than printing something nobody can read, and a finding carrying nine
+ * measurements and three long exhibits is genuinely two pages of material. So
+ * the elastic parts are budgeted here, sized so the worst case still fits at
+ * the floor, and what is left out says so. The full record is in the register
+ * and the API; the page is the client's summary of it.
+ */
+/**
+ * A finding page is one page. Always.
+ *
+ * A static budget can always be beaten by a finding carrying more than the
+ * budget allowed, so the page does not guess. Everything optional is marked
+ * droppable with a priority, and the fit pass below removes the heaviest
+ * material until the page genuinely fits, scaling only for what is left.
+ * What came out is counted and said, so nothing disappears silently. The full
+ * record is in the register and the API; the page is the client's summary.
+ *
+ * Drop order, heaviest first: extra exhibits, then extra measurements, then
+ * extra steps. The first of each always survives.
+ */
+const KEEP_EXHIBITS = 1
+const KEEP_MEASUREMENTS = 4
+const KEEP_STEPS = 5
+
 function findingPage(f: FindingFull, brand: Brand, audit: Audit, page: number): string {
+  const drop = (i: number, keep: number, base: number) =>
+    i < keep ? '' : ` data-p="${base + i}" data-kind="${base}"`
+
   const rows = f.measurements
     .map(
-      (m) =>
-        `<tr><td>${esc(m.check)}</td><td class="num">${esc(m.result)}</td><td class="dt">${esc(m.taken)}</td></tr>`,
+      (m, i) =>
+        `<tr${drop(i, KEEP_MEASUREMENTS, 50)}><td>${esc(m.check)}</td><td class="num">${esc(m.result)}</td><td class="dt">${esc(m.taken)}</td></tr>`,
     )
     .join('')
-  const steps = f.steps.map((s) => `<li>${esc(s)}</li>`).join('')
+  const steps = f.steps
+    .map((st, i) => `<li${drop(i, KEEP_STEPS, 10)}>${esc(st)}</li>`)
+    .join('')
   const exhibits = f.examples
     .map((e, i) => {
       const body =
         e.kind === 'markup' || e.kind === 'response'
-          ? `<div class="code">${esc(e.extract)}</div>`
+          ? `<div class="code">${clampExtract(e.extract ?? '')}</div>`
           : e.image_path
             ? `<div class="imgslot" data-path="${esc(e.image_path)}"></div>`
             : ''
-      return `<div class="evfig">${body}<div class="evcap"><span class="n">${i + 1}</span>
+      return `<div class="evfig"${drop(i, KEEP_EXHIBITS, 100)}>${body}<div class="evcap"><span class="n">${i + 1}</span>
         <span class="t">${esc(e.caption)}</span>
         <span class="m">${esc(e.captured ?? '')}</span></div></div>`
     })
@@ -62,6 +106,7 @@ function findingPage(f: FindingFull, brand: Brand, audit: Audit, page: number): 
     </div>
   </div>
   ${steps ? `<div class="fixbar"><div class="sect nb">The fix</div><ol class="steps">${steps}</ol></div>` : ''}
+  <p class="dropnote clip" hidden></p>
   <div class="foot"><span>Findings</span><span>${esc(brand.name)} / ${esc(audit.title)}</span><span>${page}</span></div>
 </div></div>`
 }
@@ -284,7 +329,89 @@ export function buildPrintDocument(
   return chosen[0]?.key === 'cover' ? body : `${brandCss}${body}`
 }
 
-/** Opens a print window containing only the document, then invokes print. */
+/**
+ * Fit every page onto one page.
+ *
+ * A finding carries however much evidence it carries. Rather than clipping at
+ * the page edge, which is what a fixed height box does silently, each page's
+ * content is measured once the fonts have settled and scaled down until it
+ * fits. Width is compensated as it scales, so the text gets smaller and the
+ * column stays the same measure.
+ *
+ * There is a floor. Below it the page would be unreadable, so it stops there
+ * and the overflow is allowed to show rather than pretending it fitted.
+ */
+const FIT_FLOOR = 0.74
+
+export const FIT_SCRIPT = `
+(function () {
+  var FLOOR = ${FIT_FLOOR};
+  var NAME = { '100': 'exhibit', '50': 'measurement', '10': 'step' };
+
+  document.querySelectorAll('.page > .pg').forEach(function (box) {
+    var fit = box.querySelector(':scope > .fit');
+    if (!fit) {
+      fit = document.createElement('div');
+      fit.className = 'fit';
+      // The running footer stays outside the wrapper. A transformed element
+      // becomes the containing block for its absolutely positioned
+      // descendants, so scaling the wrapper would drag the footer up the page
+      // with it and land it on top of the content.
+      var kids = [];
+      for (var k = 0; k < box.children.length; k++) kids.push(box.children[k]);
+      kids.forEach(function (el) { if (!el.classList.contains('foot')) fit.appendChild(el); });
+      box.insertBefore(fit, box.firstChild);
+    }
+    var cs = getComputedStyle(box);
+    var avail = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var note = fit.querySelector('.dropnote');
+
+    var reset = function () { fit.style.transform = ''; fit.style.width = '100%'; };
+    reset();
+
+    // Drop the heaviest optional material until what remains can be scaled
+    // into the page without going below the floor. Highest priority first,
+    // so extra exhibits go before extra measurements, and steps go last.
+    var cut = {};
+    for (var guard = 0; guard < 40; guard++) {
+      if (fit.scrollHeight <= avail / FLOOR) break;
+      var worst = null;
+      fit.querySelectorAll('[data-p]').forEach(function (el) {
+        if (!worst || +el.getAttribute('data-p') > +worst.getAttribute('data-p')) worst = el;
+      });
+      if (!worst) break;
+      var kind = worst.getAttribute('data-kind') || '10';
+      cut[kind] = (cut[kind] || 0) + 1;
+      worst.parentNode.removeChild(worst);
+      if (note) {
+        var bits = [];
+        Object.keys(cut).sort(function (a, b) { return b - a; }).forEach(function (k) {
+          var n = cut[k], w = NAME[k] || 'item';
+          bits.push(n + ' ' + (n === 1 ? w : w + 's'));
+        });
+        note.textContent = bits.join(', ') + ' not shown here. The full record is in the register.';
+        note.hidden = false;
+      }
+    }
+
+    if (fit.scrollHeight <= avail) { reset(); return; }
+
+    // Binary search the scale. Compensating the width reflows the text, which
+    // changes the height, so it cannot be solved by one division.
+    var lo = FLOOR, hi = 1, s = FLOOR;
+    for (var i = 0; i < 8; i++) {
+      var mid = (lo + hi) / 2;
+      fit.style.width = (100 / mid) + '%';
+      fit.style.transform = 'scale(' + mid + ')';
+      if (fit.scrollHeight * mid <= avail) { s = mid; lo = mid; } else { hi = mid; }
+    }
+    fit.style.width = (100 / s) + '%';
+    fit.style.transform = 'scale(' + s + ')';
+  });
+})();
+`
+
+/** Opens a print window containing only the document, fits each page, prints. */
 export function printDocument(html: string, css: string, title: string) {
   const w = window.open('', '_blank', 'width=900,height=1100')
   if (!w) {
@@ -298,8 +425,18 @@ export function printDocument(html: string, css: string, title: string) {
   )
   w.document.close()
   w.focus()
-  // Give webfonts a moment, otherwise the first print uses fallbacks.
-  const go = () => setTimeout(() => w.print(), 250)
+  const go = () => setTimeout(() => {
+    // Measure after the faces have loaded. Fitting against fallback metrics
+    // produces a scale that is wrong for the document that actually prints.
+    try {
+      const s = w.document.createElement('script')
+      s.textContent = FIT_SCRIPT
+      w.document.body.appendChild(s)
+    } catch {
+      /* if it cannot fit, print unfitted rather than not at all */
+    }
+    setTimeout(() => w.print(), 120)
+  }, 250)
   if (w.document.fonts) w.document.fonts.ready.then(go)
   else setTimeout(go, 600)
 }
