@@ -63,6 +63,8 @@ html,body{width:210mm;background:#fff;color:var(--ink);font-family:var(--body);f
    truncation with a note beats silent clipping at the page edge. */
 .clamped .body,.clamped .steps li,.clamped .ev td:first-child span{
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--cl,99);overflow:hidden}
+.record{margin-top:3mm;font-size:7.6pt;color:var(--muted);line-height:1.4}
+.record .u{font-family:var(--mono);color:var(--brand-accent);overflow-wrap:anywhere}
 .clip{display:block;margin-top:1.5mm;font-style:italic;color:var(--muted);font-size:7.6pt}
 .foot{position:absolute;left:18mm;right:18mm;bottom:9mm;display:flex;justify-content:space-between;font-family:var(--mono);font-size:7.4pt;color:var(--muted);letter-spacing:.1em;border-top:1px solid var(--line);padding-top:2.5mm}
 .cover{display:flex;flex-direction:column;justify-content:flex-end}

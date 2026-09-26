@@ -2,6 +2,7 @@ import type { Audit, Brand, FindingFull } from '../lib/types'
 import { BAND_LABEL } from '../lib/score'
 import { fontHref, identityOf, reportPalette } from '../lib/brand'
 import { sectionsOf, type SectionKey } from '../lib/sections'
+import { clientFindings, depthOf, type DepthSpec } from '../lib/depth'
 
 /**
  * PDF export. The browser's own print engine does the rendering, so there is
@@ -15,12 +16,11 @@ import { sectionsOf, type SectionKey } from '../lib/sections'
 /** Long extracts are the main reason a finding will not fit. Show the head of
  *  it and say how much was left out, rather than letting it push the fix off
  *  the page or silently clipping at the page edge. */
-const MAX_EXTRACT_LINES = 14
-function clampExtract(text: string): string {
+function clampExtract(text: string, max: number): string {
   const lines = String(text ?? '').split('\n')
-  if (lines.length <= MAX_EXTRACT_LINES) return esc(text)
-  const rest = lines.length - MAX_EXTRACT_LINES
-  return esc(lines.slice(0, MAX_EXTRACT_LINES).join('\n')) +
+  if (lines.length <= max) return esc(text)
+  const rest = lines.length - max
+  return esc(lines.slice(0, max).join('\n')) +
     `\n<span class="clip">${rest} more ${rest === 1 ? 'line' : 'lines'} not shown</span>`
 }
 
@@ -52,32 +52,38 @@ const SEV: Record<string, string> = { P1: 'crit', P2: 'high', P3: 'med', P4: 'me
  * Drop order, heaviest first: extra exhibits, then extra measurements, then
  * extra steps. The first of each always survives.
  */
-const KEEP_EXHIBITS = 1
-const KEEP_MEASUREMENTS = 4
-const KEEP_STEPS = 5
-
-function findingPage(f: FindingFull, brand: Brand, audit: Audit, page: number): string {
+function findingPage(
+  f: FindingFull, brand: Brand, audit: Audit, page: number, d: DepthSpec, sheetUrl?: string | null,
+): string {
+  // Everything past the depth budget is not on the page at all, so the fit
+  // pass has far less to do. What it still marks droppable is the tail of
+  // what the budget allowed, for the finding that runs long even so.
+  const keepM = Math.max(2, Math.floor(d.measurements / 2))
+  const keepE = d.exhibits > 0 ? 1 : 0
+  const keepS = Math.max(3, Math.floor(d.steps / 2))
   const drop = (i: number, keep: number, base: number) =>
     i < keep ? '' : ` data-p="${base + i}" data-kind="${base}"`
 
-  const rows = f.measurements
+  const rows = f.measurements.slice(0, d.measurements)
     .map(
       (m, i) =>
-        `<tr${drop(i, KEEP_MEASUREMENTS, 50)}><td><span>${esc(m.check)}</span></td><td class="num">${esc(m.result)}</td><td class="dt">${esc(m.taken)}</td></tr>`,
+        `<tr${drop(i, keepM, 50)}><td><span>${esc(m.check)}</span></td><td class="num">${esc(m.result)}</td><td class="dt">${esc(m.taken)}</td></tr>`,
     )
     .join('')
   const steps = f.steps
-    .map((st, i) => `<li${drop(i, KEEP_STEPS, 10)}>${esc(st)}</li>`)
+    .slice(0, d.steps)
+    .map((st, i) => `<li${drop(i, keepS, 10)}>${esc(st)}</li>`)
     .join('')
   const exhibits = f.examples
+    .slice(0, d.exhibits)
     .map((e, i) => {
       const body =
         e.kind === 'markup' || e.kind === 'response'
-          ? `<div class="code">${clampExtract(e.extract ?? '')}</div>`
+          ? `<div class="code">${clampExtract(e.extract ?? '', d.extractLines)}</div>`
           : e.image_path
             ? `<div class="imgslot" data-path="${esc(e.image_path)}"></div>`
             : ''
-      return `<div class="evfig"${drop(i, KEEP_EXHIBITS, 100)}>${body}<div class="evcap"><span class="n">${i + 1}</span>
+      return `<div class="evfig"${drop(i, keepE, 100)}>${body}<div class="evcap"><span class="n">${i + 1}</span>
         <span class="t">${esc(e.caption)}</span>
         <span class="m">${esc(e.captured ?? '')}</span></div></div>`
     })
@@ -106,6 +112,10 @@ function findingPage(f: FindingFull, brand: Brand, audit: Audit, page: number): 
     </div>
   </div>
   ${steps ? `<div class="fixbar"><div class="sect nb">The fix</div><ol class="steps">${steps}</ol></div>` : ''}
+  ${sheetUrl
+    ? `<p class="record">The full record for this finding, with every measurement and exhibit,
+        is in the register: <span class="u">${esc(sheetUrl)}</span></p>`
+    : ''}
   <p class="dropnote clip" hidden></p>
   <div class="foot"><span>Findings</span><span>${esc(brand.name)} / ${esc(audit.title)}</span><span>${page}</span></div>
 </div></div>`
@@ -247,8 +257,14 @@ export function buildPrintDocument(
   /** Signed URL for the brand logo. Resolved by the caller, because the
    *  bucket is private and this function is pure. */
   logoUrl?: string | null,
+  /** The register this document is the argument for. Printed on each finding
+   *  page, so "the rest is in the sheet" is a link rather than a claim. */
+  sheetUrl?: string | null,
 ): string {
-  const ordered = [...findings].sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+  const d = depthOf(audit)
+  // exposure exists so a finding can stay in the register without reaching the
+  // client. The document was printing them anyway, which made the flag a lie.
+  const ordered = clientFindings(findings).sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
   const counts = { P1: 0, P2: 0, P3: 0, P4: 0 } as Record<string, number>
   for (const f of ordered) if (f.band) counts[f.band]++
 
@@ -317,7 +333,7 @@ export function buildPrintDocument(
     summary: () => summaryPage(ordered, counts),
     contents: () => index,
     method: () => methodPage(audit),
-    findings: () => ordered.map((f, i) => findingPage(f, brand, audit, i + 3)).join(''),
+    findings: () => ordered.map((f, i) => findingPage(f, brand, audit, i + 3, d, sheetUrl)).join(''),
     roadmap: () => roadmapPage(ordered),
     appendix: () => appendixPage(),
   }

@@ -1,5 +1,6 @@
 import type { Audit, Brand, FindingFull, PriorityBand } from '../lib/types'
 import { resolveColumns, withRefs, type SheetCol } from '../lib/sheetcols'
+import { clientFindings } from '../lib/depth'
 
 /**
  * Google Sheets export.
@@ -138,7 +139,9 @@ export async function exportToSheets(
 ): Promise<string> {
   const token = await getToken()
   const title = `${brand.name} / ${audit.title}`
-  const ordered = [...findings].sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+  // The register is complete, but an internal finding is still not the
+  // client's to read. Same rule as the document.
+  const ordered = clientFindings(findings).sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
   // Which columns, in which order. Chosen on the audit, so two exports of the
   // same audit carry the same register.
   const cols: SheetCol[] = withRefs(resolveColumns(audit), findings)

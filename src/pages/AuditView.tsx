@@ -6,37 +6,11 @@ import {
 import type { Audit, Brand, FindingFull } from '../lib/types'
 import FindingEditor from '../components/FindingEditor'
 import LogicEditor from '../components/LogicEditor'
-import ReportModal from '../components/ReportModal'
-import SheetsModal from '../components/SheetsModal'
-import { exportToDoc } from '../export/gdoc'
+import ExportModal from '../components/ExportModal'
 import { STAGE_LABEL, stage } from '../lib/lifecycle'
 import { identityOf } from '../lib/brand'
-import { exportToSheets, sheetsConfigured } from '../export/sheets'
+import { sheetsConfigured } from '../export/sheets'
 import { supabase } from '../lib/supabase'
-
-
-/**
- * Hands an error to the progress page opened for an export. The page may not
- * have finished loading when the export fails, so this waits for its hook to
- * appear rather than assuming it is there.
- */
-async function reportFailure(tab: Window | null, message: string): Promise<boolean> {
-  if (!tab || tab.closed) return false
-  for (let i = 0; i < 40; i++) {
-    try {
-      const hook = (tab as unknown as { exportFailed?: (m: string) => void }).exportFailed
-      if (typeof hook === 'function') {
-        hook(message)
-        return true
-      }
-    } catch {
-      // Cross origin for a moment while the page loads. Keep waiting.
-    }
-    if (tab.closed) return false
-    await new Promise((r) => setTimeout(r, 150))
-  }
-  return false
-}
 
 
 export default function AuditView() {
@@ -47,11 +21,11 @@ export default function AuditView() {
   const [sel, setSel] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [toast, setToast] = useState<{ msg: string; url?: string } | null>(null)
-  const [busy, setBusy] = useState(false)
+  // Resolved once when the dialog opens, so the preview and the printed
+  // file are built from the same inputs.
+  const [ex, setEx] = useState<{ byline: string; logoUrl: string | null } | null>(null)
   // The export dialog resolves the byline and the signed logo URL once on
   // open, so the preview and the printed file are built from the same inputs.
-  const [report, setReport] = useState<{ byline: string; logoUrl: string | null } | null>(null)
-  const [sheets, setSheets] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -107,80 +81,17 @@ export default function AuditView() {
     setSel(f.id)
   }
 
-  async function exportPdf() {
+  async function openExport() {
     if (!brand || !audit) return
     const { data } = await supabase.auth.getUser()
     const byline =
       (data.user?.user_metadata as { full_name?: string })?.full_name ?? data.user?.email ?? ''
     // The logo lives in a private bucket, so it has to be signed before either
-    // the preview or the print window can load it. A missing logo is not an
-    // error: the cover falls back to the wordmark.
+    // the preview or the print window can load it.
     const path = identityOf(brand).logo_path
-    setReport({ byline, logoUrl: path ? await evidenceUrl(path) : null })
+    setEx({ byline, logoUrl: path ? await evidenceUrl(path) : null })
   }
 
-  /** The editable version. Same sections, same brand kit, rebuilt as a Doc. */
-  async function exportDoc() {
-    if (!brand || !audit) return
-    setBusy(true)
-    const tab = window.open('/exporting/', '_blank')
-    try {
-      const { data } = await supabase.auth.getUser()
-      const byline =
-        (data.user?.user_metadata as { full_name?: string })?.full_name ?? data.user?.email ?? ''
-      const url = await exportToDoc(brand, audit, findings, byline)
-      if (tab && !tab.closed) {
-        try { tab.location.replace(url) } catch { tab.location.href = url }
-        say('Doc created in your Drive.')
-      } else {
-        say('Doc created in your Drive.', url)
-      }
-    } catch (e) {
-      const message = (e as Error).message
-      if (!(await reportFailure(tab, message))) tab?.close()
-      say(message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function exportSheets() {
-    if (!brand || !audit) return
-    setBusy(true)
-    // Open the tab synchronously, while the click is still the active user
-    // gesture. Opening it after the await gets silently blocked, because by
-    // then the browser no longer connects the call to the click.
-    // Point it at a real same origin page rather than about:blank. The user
-    // sees the app's own domain and a progress state for the few seconds the
-    // export takes, instead of a blank tab with no explanation.
-    const tab = window.open('/exporting/', '_blank')
-    try {
-      const { data } = await supabase.auth.getUser()
-      const byline =
-        (data.user?.user_metadata as { full_name?: string })?.full_name ?? data.user?.email ?? ''
-      const url = await exportToSheets(brand, audit, findings, byline)
-      if (tab && !tab.closed) {
-        // replace, not assign, so Back does not land on the progress page.
-        try {
-          tab.location.replace(url)
-        } catch {
-          tab.location.href = url
-        }
-        say('Sheet created in your Drive.')
-      } else {
-        // Blocked or closed. Hand over a link instead of losing the sheet.
-        say('Sheet created in your Drive.', url)
-      }
-    } catch (e) {
-      const message = (e as Error).message
-      // Show the failure in the tab the user is looking at, rather than
-      // closing it out from under them and leaving the reason behind.
-      if (!(await reportFailure(tab, message))) tab?.close()
-      say(message)
-    } finally {
-      setBusy(false)
-    }
-  }
 
   if (!audit || !brand) return <div className="wrap"><span className="saving">Loading</span></div>
 
@@ -196,13 +107,7 @@ export default function AuditView() {
           </span>
         </div>
         <span className="grow" />
-        <button className="btn sm" onClick={exportPdf}>PDF</button>
-        <button className="btn sm" onClick={exportDoc} disabled={busy || !sheetsConfigured()}
-          title="An editable Google Doc built from the same sections">Doc</button>
-        <button className="btn sm" onClick={() => setSheets(true)} disabled={busy || !sheetsConfigured()}
-          title={sheetsConfigured() ? 'Creates a new sheet in your Drive' : 'Set VITE_GOOGLE_CLIENT_ID to enable'}>
-          {busy ? 'Working...' : 'Sheets'}
-        </button>
+        <button className="btn sm pri" onClick={openExport}>Export</button>
       </div>
 
       <div className="split">
@@ -272,26 +177,17 @@ export default function AuditView() {
         </div>
       </div>
 
-      {sheets && (
-        <SheetsModal
-          audit={audit}
-          findings={findings}
-          busy={busy}
-          onChange={setAudit}
-          onClose={() => setSheets(false)}
-          onExport={() => { setSheets(false); exportSheets() }}
-        />
-      )}
-
-      {report && brand && (
-        <ReportModal
+      {ex && brand && (
+        <ExportModal
           audit={audit}
           brand={brand}
           findings={findings}
-          byline={report.byline}
-          logoUrl={report.logoUrl}
+          byline={ex.byline}
+          logoUrl={ex.logoUrl}
+          sheetsReady={sheetsConfigured()}
           onChange={setAudit}
-          onClose={() => setReport(null)}
+          onClose={() => setEx(null)}
+          say={say}
         />
       )}
 
