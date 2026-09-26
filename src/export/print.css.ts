@@ -58,6 +58,11 @@ html,body{width:210mm;background:#fff;color:var(--ink);font-family:var(--body);f
 .steps{counter-reset:s;margin-top:3mm}
 .steps li{list-style:none;counter-increment:s;position:relative;padding-left:8mm;margin-bottom:3.2mm;font-size:10pt;line-height:1.5;color:var(--ink2)}
 .steps li::before{content:counter(s);position:absolute;left:0;top:.2mm;font-family:var(--mono);font-size:8pt;color:var(--teal-d);border:1px solid var(--teal);border-radius:50%;width:5.2mm;height:5.2mm;display:flex;align-items:center;justify-content:center}
+/* Last resort, when nothing is left to drop and the page is still over: the
+   prose itself is shortened to a line count the fit pass settles on. Visible
+   truncation with a note beats silent clipping at the page edge. */
+.clamped .body,.clamped .steps li,.clamped .ev td:first-child span{
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--cl,99);overflow:hidden}
 .clip{display:block;margin-top:1.5mm;font-style:italic;color:var(--muted);font-size:7.6pt}
 .foot{position:absolute;left:18mm;right:18mm;bottom:9mm;display:flex;justify-content:space-between;font-family:var(--mono);font-size:7.4pt;color:var(--muted);letter-spacing:.1em;border-top:1px solid var(--line);padding-top:2.5mm}
 .cover{display:flex;flex-direction:column;justify-content:flex-end}

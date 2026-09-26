@@ -63,7 +63,7 @@ function findingPage(f: FindingFull, brand: Brand, audit: Audit, page: number): 
   const rows = f.measurements
     .map(
       (m, i) =>
-        `<tr${drop(i, KEEP_MEASUREMENTS, 50)}><td>${esc(m.check)}</td><td class="num">${esc(m.result)}</td><td class="dt">${esc(m.taken)}</td></tr>`,
+        `<tr${drop(i, KEEP_MEASUREMENTS, 50)}><td><span>${esc(m.check)}</span></td><td class="num">${esc(m.result)}</td><td class="dt">${esc(m.taken)}</td></tr>`,
     )
     .join('')
   const steps = f.steps
@@ -390,6 +390,25 @@ export const FIT_SCRIPT = `
           bits.push(n + ' ' + (n === 1 ? w : w + 's'));
         });
         note.textContent = bits.join(', ') + ' not shown here. The full record is in the register.';
+        note.hidden = false;
+      }
+    }
+
+    // Nothing droppable left and still too tall. That means the overflow is
+    // all material the page is not allowed to remove: the title, the basis,
+    // the first four measurements, the first five steps. Shorten the prose to
+    // a line count that fits, and say so. Visible truncation beats silent
+    // clipping at the page edge, which is what this whole pass exists to stop.
+    if (fit.scrollHeight > avail / FLOOR) {
+      var clamps = [10, 8, 6, 5, 4, 3, 2];
+      fit.classList.add('clamped');
+      for (var c = 0; c < clamps.length; c++) {
+        fit.style.setProperty('--cl', clamps[c]);
+        if (fit.scrollHeight <= avail / FLOOR) break;
+      }
+      if (note) {
+        note.textContent = (note.hidden ? '' : note.textContent.replace(/\.$/, '') + '. ') +
+          'Some wording is shortened to fit. The full text is in the register.';
         note.hidden = false;
       }
     }
