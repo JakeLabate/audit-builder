@@ -11,6 +11,7 @@
 import { ApiError, rpc, type Env } from './db'
 import { audits, brands, examples, exports_, findings, schema, type Ctx } from './resources'
 import { handleMcp } from './mcp'
+import { handleRender } from './render'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -28,6 +29,19 @@ export default {
 
     if (path === '/' || path === '/v1') return json(index(url.origin))
     if (path === '/health') return json({ ok: true })
+
+    // The app in a browser has a Supabase session, not an API key, so this one
+    // route authenticates itself and never reaches the key gate below.
+    if (path === '/render') {
+      try {
+        const res = await handleRender(req, env as never)
+        for (const [k, v] of Object.entries(CORS)) res.headers.set(k, v)
+        return res
+      } catch (e) {
+        if (e instanceof ApiError) return json({ error: e.message }, e.status)
+        return json({ error: (e as Error).message }, 500)
+      }
+    }
 
     try {
       const ctx = await authenticate(req, env)

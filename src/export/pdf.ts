@@ -445,7 +445,31 @@ export const FIT_SCRIPT = `
     fit.style.transform = 'scale(' + s + ')';
   });
 })();
+  document.documentElement.setAttribute('data-fit','done');
+
 `
+
+
+/**
+ * The same document, as one self contained file.
+ *
+ * printDocument builds this in a popup and throws it away. A headless renderer
+ * needs the identical bytes, fit pass included, so the stored PDF is the same
+ * artifact the print dialog would have produced rather than a second rendering
+ * that drifts from it.
+ */
+export function buildStandaloneDocument(html: string, css: string, title: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>${css}</style></head><body>${html}
+<script>(function(){
+  var run = function () { try { ${FIT_SCRIPT} } catch (e) {
+    document.documentElement.setAttribute('data-fit','failed');
+  } };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ setTimeout(run, 120) });
+  else setTimeout(run, 600);
+})();<\/script></body></html>`
+}
 
 /** Opens a print window containing only the document, fits each page, prints. */
 export function printDocument(html: string, css: string, title: string) {

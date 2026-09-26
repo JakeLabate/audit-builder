@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import Deliverables from '../components/Deliverables'
 import { Link, useParams } from 'react-router-dom'
 import {
   evidenceUrl, createFinding, getAudit, listBrands, listFindings, nextRef, updateAudit,
@@ -21,6 +22,7 @@ export default function AuditView() {
   const [sel, setSel] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [toast, setToast] = useState<{ msg: string; url?: string } | null>(null)
+  const [exported, setExported] = useState(0)
   // Resolved once when the dialog opens, so the preview and the printed
   // file are built from the same inputs.
   const [ex, setEx] = useState<{ byline: string; logoUrl: string | null } | null>(null)
@@ -177,6 +179,8 @@ export default function AuditView() {
         </div>
       </div>
 
+      {audit && <Deliverables auditId={audit.id} reload={exported} />}
+
       {ex && brand && (
         <ExportModal
           audit={audit}
@@ -188,6 +192,7 @@ export default function AuditView() {
           onChange={setAudit}
           onClose={() => setEx(null)}
           say={say}
+          onExported={() => setExported((n) => n + 1)}
         />
       )}
 

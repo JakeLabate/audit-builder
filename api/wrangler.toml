@@ -8,3 +8,9 @@ MAX_PAGE = "200"
 # Secrets, set once with `wrangler secret put <NAME>`:
 #   SUPABASE_URL                https://vvekkbboqqkxnlpmxazh.supabase.co
 #   SUPABASE_SERVICE_ROLE_KEY   Supabase > Project settings > API
+
+# Headless Chrome, for turning an export into a real PDF. Free within the
+# Workers plan allowance: 10 minutes of browser time a day on Free, 10 hours a
+# month on Paid. A nineteen page report takes about four seconds.
+[browser]
+binding = "BROWSER"
