@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Deliverables from '../components/Deliverables'
 import { Link, useParams } from 'react-router-dom'
 import {
-  evidenceUrl, createFinding, getAudit, listBrands, listFindings, nextRef, updateAudit,
+  evidenceUrl, createFinding, getAudit, listBrands, listFindings, nextRef, updateAudit, withBands,
 } from '../lib/api'
 import type { Audit, Brand, FindingFull } from '../lib/types'
 import FindingEditor from '../components/FindingEditor'
@@ -79,7 +79,7 @@ export default function AuditView() {
     if (!audit) return
     const ref = await nextRef(audit.id, 'TECH')
     const f = await createFinding(audit.org_id, audit.id, ref, '', findings.length)
-    setFindings((p) => [...p, f])
+    setFindings((p) => withBands([...p, f]))
     setSel(f.id)
   }
 
@@ -157,15 +157,15 @@ export default function AuditView() {
                 audit={audit}
                 brand={brand}
                 all={findings}
-                onSaved={(f) => setFindings((p) => p.map((x) => (x.id === f.id ? f : x)))}
+                onSaved={(f) => setFindings((p) => withBands(p.map((x) => (x.id === f.id ? f : x))))}
               />
             ) : (
               <FindingEditor
                 finding={current}
                 auditStatus={audit.status}
-                onChange={(f) => setFindings((p) => p.map((x) => (x.id === f.id ? f : x)))}
+                onChange={(f) => setFindings((p) => withBands(p.map((x) => (x.id === f.id ? f : x))))}
                 onDeleted={() => {
-                  setFindings((p) => p.filter((x) => x.id !== current.id))
+                  setFindings((p) => withBands(p.filter((x) => x.id !== current.id)))
                   setSel(null)
                 }}
               />

@@ -29,7 +29,7 @@ export const SHEET_COLUMNS: SheetCol[] = [
     value: (f) => f.ref },
   { key: 'title', header: 'Finding', note: 'What is wrong, stated as a claim you can agree or disagree with.', width: 340, wrap: true,
     value: (f) => f.title },
-  { key: 'band', header: 'Priority', note: 'P1 do first, P2 scheduled, P3 alongside, P4 monitor.', width: 90,
+  { key: 'band', header: 'Priority', note: 'Position in this audit: P1 do first, P2 scheduled, P3 alongside, P4 monitor.', width: 90,
     value: (f) => f.band ?? '' },
   { key: 'score', header: 'Score', note: '0 to 100, computed.', width: 70,
     value: (f) => f.score ?? '' },

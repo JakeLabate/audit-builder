@@ -230,14 +230,15 @@ export async function exportToSheets(
     [audit.gaps ?? 'Nothing material was unavailable.'],
     [],
     ['How priority is computed'],
-    ['score = 100 x (severity x reach x confidence x leverage) / sqrt(effort days) x risk factor'],
+    ['score = 3 x (severity x reach x confidence x leverage) / sqrt(effort days) x risk factor'],
     ['Effort sits under a square root, so a fix taking four times as long is penalised twice, not four times. Without that the register would recommend nothing but trivia.'],
+    ['The band is a position inside this audit, not a fixed number: P1 is the most urgent work here rather than a score above a threshold. Findings that score the same always share a band. The score column keeps this audit comparable with another.'],
     [],
-    ['Band', 'Score', 'Means'],
-    ['P1', '80 to 100', 'Do this first. Blocking, or cheap and high leverage.'],
-    ['P2', '55 to 79', 'Scheduled work. Real impact, real effort.'],
-    ['P3', '30 to 54', 'Worth doing when the surrounding work is open.'],
-    ['P4', 'Under 30', 'Monitor. Not worth acting on alone.'],
+    ['Band', 'Share of this audit', 'Means'],
+    ['P1', 'Top 15%', 'Do this first. Blocking, or cheap and high leverage.'],
+    ['P2', 'Next 25%', 'Scheduled work. Real impact, real effort.'],
+    ['P3', 'Next 30%', 'Worth doing when the surrounding work is open.'],
+    ['P4', 'The rest', 'Monitor. Not worth acting on alone.'],
   ]
 
   await api(token, `https://sheets.googleapis.com/v4/spreadsheets/${id}/values:batchUpdate`, {

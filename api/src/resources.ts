@@ -16,6 +16,34 @@ const cap = (env: Env, n: unknown) =>
 
 const FINDING_SELECT = '*,examples(*)'
 
+/**
+ * Attach score, risk factor and band.
+ *
+ * The tool description has always promised "with their exhibits and computed
+ * score" and the worker never joined the view, so every finding came back
+ * without one. finding_scores is a view with no foreign key, so PostgREST
+ * will not embed it; the rows are fetched for the same audits and merged.
+ *
+ * The band in particular has to come from the database. It is a position
+ * within an audit, so it cannot be worked out from a single finding, and an
+ * agent recomputing it from the score would get a different answer.
+ */
+async function withScores(
+  env: Env, org: string, rows: Record<string, unknown>[],
+): Promise<Record<string, unknown>[]> {
+  const audits = [...new Set(rows.map((r) => String(r.audit_id)).filter(Boolean))]
+  if (audits.length === 0) return rows
+  const scores = (await scoped(
+    env, org, 'finding_scores',
+    `audit_id=in.(${audits.join(',')})&select=id,score,risk_factor,band`,
+  )) as { id: string; score: number | null; risk_factor: number | null; band: string | null }[]
+  const by = new Map(scores.map((s) => [s.id, s]))
+  return rows.map((r) => {
+    const s = by.get(String(r.id))
+    return { ...r, score: s?.score ?? null, risk_factor: s?.risk_factor ?? null, band: s?.band ?? null }
+  })
+}
+
 /* ------------------------------------------------------------------ brands */
 export const brands = {
   async list(env: Env, ctx: Ctx) {
@@ -109,12 +137,13 @@ export const findings = {
     if (q.get('owner')) bits.push(`owner=eq.${q.get('owner')}`)
     if (q.get('wave')) bits.push(`wave=eq.${q.get('wave')}`)
     if (q.get('q')) bits.push(`title=ilike.*${q.get('q')}*`)
-    return scoped(env, ctx.org, 'findings', bits.join('&'))
+    const rows = (await scoped(env, ctx.org, 'findings', bits.join('&'))) as Record<string, unknown>[]
+    return withScores(env, ctx.org, rows)
   },
   async get(env: Env, ctx: Ctx, id: string) {
     const f = await scoped(env, ctx.org, 'findings', `id=eq.${id}&select=${FINDING_SELECT}`, true)
     if (!f) throw new ApiError(404, `No finding with id ${id}.`)
-    return f
+    return (await withScores(env, ctx.org, [f as Record<string, unknown>]))[0]
   },
   async create(env: Env, ctx: Ctx, body: Record<string, unknown>) {
     needWrite(ctx)
@@ -173,9 +202,9 @@ export const exports_ = {
   async audit(env: Env, ctx: Ctx, id: string, format: string) {
     const audit = (await audits.get(env, ctx, id)) as Record<string, unknown>
     const brand = (await brands.get(env, ctx, String(audit.brand_id))) as Record<string, unknown>
-    const rows = (await scoped(
+    const rows = await withScores(env, ctx.org, (await scoped(
       env, ctx.org, 'findings', `audit_id=eq.${id}&select=${FINDING_SELECT}&order=position`,
-    )) as Record<string, unknown>[]
+    )) as Record<string, unknown>[])
 
     if (format === 'json') return { brand, audit, findings: rows }
     if (format === 'csv') return { csv: toCsv(rows) }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Audit, Brand, Finding, FindingFull } from '../lib/types'
 import { updateFinding } from '../lib/api'
-import { BAND_LABEL, band as bandOf, riskFactor, score as scoreOf } from '../lib/score'
+import { BAND_LABEL, riskFactor, score as scoreOf } from '../lib/score'
 import {
   blockers, deriveConfidenceFactor, deriveLeverage, deriveReach, deriveRef, deriveVerifyBy,
   deriveWave, deriveWindow, EFFORT_BUCKETS, NEXT_STATUS, registryOf,
@@ -101,7 +101,7 @@ export default function LogicEditor({
   }
   const rf = riskFactor(live)
   const sc = scoreOf(live)
-  const bd = bandOf(sc)
+  const bd = f.band   // settled by the page, which can see the whole audit
   const wave = deriveWave({ ...live, wave: null }, bd, all)
   const stop = blockers(live)
   const frozen = audit.status !== 'draft'

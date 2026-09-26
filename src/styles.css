@@ -1040,3 +1040,20 @@ input, select, textarea { font-size: 16px }
 .joinbox p{font-size:14px;line-height:1.6;color:var(--ink-2);margin:0 0 16px}
 
 @media (max-width:760px){ .keytab .you{font-size:10px} }
+
+/* ---- Account ----------------------------------------------------------- */
+.delrow{display:block;margin:8px 0 0}
+.delrow b{display:block;font-size:13.5px;color:var(--ink)}
+.delrow span{display:block;font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.delsum{margin:12px 0 0;font-size:12.5px;color:var(--crim);line-height:1.5}
+.delbox{margin-top:14px;padding:16px;background:#FCF1F2;border:1px solid var(--crim);
+  border-radius:var(--r)}
+.delbox .doc-p{margin-bottom:10px}
+.btn.danger{border-color:var(--crim);color:var(--crim)}
+.btn.danger:hover:not(:disabled){background:var(--crim);color:#fff}
+
+/* Terms and privacy sit at the foot of the sign in screen, where somebody
+   deciding whether to hand over their work can actually see them. */
+.legalfoot{margin-top:22px;font-size:12px;color:var(--muted);text-align:center}
+.legalfoot a{color:var(--muted)}
+.legalfoot a:hover{color:var(--ink)}

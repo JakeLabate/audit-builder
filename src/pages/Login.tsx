@@ -189,6 +189,13 @@ export default function Login() {
             {err}
           </div>
         )}
+
+        {/* Where somebody deciding whether to hand over a client's work can
+            actually read them, rather than buried after they have. */}
+        <p className="legalfoot">
+          By signing in you accept the <a href="/legal/terms">terms</a>
+          {' '}and the <a href="/legal/privacy">privacy notice</a>.
+        </p>
       </div>
     </div>
   )

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type {
   AcceptanceCheck, AffectedParty, AuditStatus, CheckKind, Example, FindingFull, FindingHistory, Measurement,
 } from '../lib/types'
-import { BAND_LABEL, missingRequirements, riskFactor, score, band } from '../lib/score'
+import { BAND_LABEL, missingRequirements, riskFactor, score } from '../lib/score'
 import {
   createExample, deleteExample, deleteFinding, listHistory, updateExample, updateFinding, uploadEvidence, evidenceUrl,
 } from '../lib/api'
@@ -163,7 +163,8 @@ export default function FindingEditor({
   const set = <K extends keyof FindingFull>(k: K, v: FindingFull[K]) => {
     const next = { ...f, [k]: v }
     next.score = score(next)
-    next.band = band(next.score)
+    // Not next.band: a band is a position within the audit, so it is settled
+    // by the page that holds every finding, not here.
     next.risk_factor = riskFactor(next)
     onChange(next)
   }

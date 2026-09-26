@@ -89,11 +89,19 @@ export default function Guide() {
           audits written months apart stay comparable. And when a client argues with the ordering,
           the argument is about an input you can both look at rather than about your instincts.
         </p>
+        <p className="doc-p">
+          The band is a position inside its own audit, not a fixed number. That is deliberate.
+          Cutting at fixed scores meant only a finding that was severe and high leverage and
+          near total reach ever reached P1, so an audit where nothing was catastrophic read as
+          though nothing mattered: most of it came out as Monitor. A band answers what to do
+          first here; the score, which is on every page, is what compares two audits.
+          Findings that score the same always share a band.
+        </p>
         <div className="bandgrid">
-          <div><b>P1</b><span>80 to 100</span><em>Do this first</em></div>
-          <div><b>P2</b><span>55 to 79</span><em>Scheduled work</em></div>
-          <div><b>P3</b><span>30 to 54</span><em>Do alongside</em></div>
-          <div><b>P4</b><span>under 30</span><em>Monitor</em></div>
+          <div><b>P1</b><span>top 15%</span><em>Do this first</em></div>
+          <div><b>P2</b><span>next 25%</span><em>Scheduled work</em></div>
+          <div><b>P3</b><span>next 30%</span><em>Do alongside</em></div>
+          <div><b>P4</b><span>the rest</span><em>Monitor</em></div>
         </div>
       </section>
 

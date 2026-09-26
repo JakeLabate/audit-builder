@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type { AuditMode, Audit, Brand, Example, Finding, FindingFull, FindingHistory, Org } from './types'
-import { band, riskFactor, score } from './score'
+import { absoluteBand, bandsFor, riskFactor, score } from './score'
 
 /** RLS does the filtering, so no query here passes an org id as a filter. */
 
@@ -80,18 +80,29 @@ export async function listFindings(auditId: string): Promise<FindingFull[]> {
     .eq('audit_id', auditId)
     .order('position')
   if (error) throw error
-  return (data ?? []).map(decorate)
+  return withBands((data ?? []).map(decorate))
 }
 
+/**
+ * Score one row. The band is deliberately not set here: it depends on the
+ * rest of the audit, so it cannot be known from a single finding. Anything
+ * that has the whole audit runs the list through withBands afterwards.
+ */
 export function decorate(row: Finding & { examples?: Example[] }): FindingFull {
   const s = score(row)
   return {
     ...row,
     examples: (row.examples ?? []).sort((a, b) => a.position - b.position),
     score: s,
-    band: band(s),
+    band: absoluteBand(s),
     risk_factor: riskFactor(row),
   }
+}
+
+/** Assign every finding its position within the audit it belongs to. */
+export function withBands(rows: FindingFull[]): FindingFull[] {
+  const bands = bandsFor(rows)
+  return rows.map((f) => ({ ...f, band: bands.get(f.id) ?? f.band }))
 }
 
 export async function nextRef(auditId: string, pillarPrefix: string): Promise<string> {

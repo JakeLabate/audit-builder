@@ -33,6 +33,22 @@ export async function handleRender(req: Request, env: RenderEnv): Promise<Respon
 
   const org = await orgForUser(env, token, body.audit_id)
 
+  // A browser costs real allowance, and the worker has no memory between
+  // requests, so the counting happens in the database where a race cannot
+  // let two callers both believe they were under the limit.
+  const gate = await rateLimit(env, org, body.audit_id)
+  if (!gate.allowed) {
+    return new Response(JSON.stringify({
+      error: `This workspace has rendered ${gate.used_hour} documents in the last hour and `
+        + `${gate.used_day} today, which is the limit. Try again in `
+        + `${Math.ceil(gate.retry_after_seconds / 60)} minutes.`,
+      retry_after_seconds: gate.retry_after_seconds,
+    }), {
+      status: 429,
+      headers: { 'content-type': 'application/json', 'retry-after': String(gate.retry_after_seconds) },
+    })
+  }
+
   const pdf = await toPdf(env, body.html)
 
   const name = safeName(body.filename ?? 'report')
@@ -62,6 +78,25 @@ async function orgForUser(env: Env, token: string, auditId: string): Promise<str
   const org = rows?.[0]?.org_id
   if (!org) throw new ApiError(404, 'No audit with that id, or you cannot see it.')
   return org
+}
+
+interface Gate { allowed: boolean; used_hour: number; used_day: number; retry_after_seconds: number }
+
+async function rateLimit(env: Env, org: string, auditId: string): Promise<Gate> {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/render_allow`, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_org: org, p_user: null, p_audit: auditId }),
+  })
+  // A limiter that fails closed would make a database hiccup look like a
+  // broken export. It fails open and the allowance absorbs it.
+  if (!res.ok) return { allowed: true, used_hour: 0, used_day: 0, retry_after_seconds: 0 }
+  const rows = (await res.json().catch(() => [])) as Gate[]
+  return rows?.[0] ?? { allowed: true, used_hour: 0, used_day: 0, retry_after_seconds: 0 }
 }
 
 async function toPdf(env: RenderEnv, html: string): Promise<Uint8Array> {

@@ -178,16 +178,20 @@ function methodPage(audit: Audit): string {
     ${audit.gaps ? `<div class="sect mt">What it could not see</div>
       <p class="body">${esc(audit.gaps)}</p>` : ''}
     <div class="sect mt">How priority is worked out</div>
-    <p class="body">Every finding is scored the same way, so two written weeks apart stay
-      comparable. Effort sits under a square root deliberately: dividing by it outright
-      would make the register recommend nothing but trivia.</p>
+    <p class="body">Every finding is scored the same way, so the ordering is arithmetic
+      rather than opinion. Effort sits under a square root deliberately: dividing by it
+      outright would make the register recommend nothing but trivia.</p>
     <div class="formula">score = 3 &times; (severity &times; reach &times; confidence &times; leverage)
       &divide; sqrt(effort) &times; risk factor, capped at 100</div>
-    <table class="ev tbl-band"><thead><tr><th>Band</th><th>Score</th><th>What it means</th></tr></thead><tbody>
-      <tr><td class="dt">P1</td><td class="num">80 to 100</td><td>Do this first</td></tr>
-      <tr><td class="dt">P2</td><td class="num">55 to 79</td><td>Scheduled work</td></tr>
-      <tr><td class="dt">P3</td><td class="num">30 to 54</td><td>Do alongside</td></tr>
-      <tr><td class="dt">P4</td><td class="num">Under 30</td><td>Monitor</td></tr>
+    <p class="body">The band is a position inside this audit rather than a fixed number:
+      P1 is the most urgent work here, not a score above some threshold. Two findings that
+      score the same always share a band. The score itself is on every page, so this audit
+      stays comparable with another.</p>
+    <table class="ev tbl-band"><thead><tr><th>Band</th><th>Share of this audit</th><th>What it means</th></tr></thead><tbody>
+      <tr><td class="dt">P1</td><td class="num">Top 15%</td><td>Do this first</td></tr>
+      <tr><td class="dt">P2</td><td class="num">Next 25%</td><td>Scheduled work</td></tr>
+      <tr><td class="dt">P3</td><td class="num">Next 30%</td><td>Do alongside</td></tr>
+      <tr><td class="dt">P4</td><td class="num">The rest</td><td>Monitor</td></tr>
     </tbody></table>
   </div></div>`
 }

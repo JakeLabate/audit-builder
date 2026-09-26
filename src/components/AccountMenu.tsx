@@ -90,6 +90,11 @@ export default function AccountMenu({ session }: { session: Session }) {
             ))}
           </div>
 
+          <NavLink to="/account" role="menuitem"
+            className={({ isActive }) => 'acct-item' + (isActive ? ' on' : '')}>
+            Account and data
+          </NavLink>
+
           <button className="acct-item danger" role="menuitem" disabled={busy}
             onClick={async () => { setBusy(true); await supabase.auth.signOut() }}>
             {busy ? 'Signing out' : 'Sign out'}

@@ -27,12 +27,61 @@ export function score(f: Finding): number | null {
   return Math.min(100, Math.round(raw))
 }
 
-export function band(s: number | null): PriorityBand | null {
+/**
+ * Where a finding sits in its own audit.
+ *
+ * Fixed thresholds on the score put most findings in P4 and the report
+ * printed that as "Monitor". The product term spans roughly a hundred to one
+ * between a severe high leverage finding and an ordinary one, while the bands
+ * were linear slices of 0 to 100, so only the extreme ever cleared 80. An
+ * audit where nothing is catastrophic read as though nothing mattered.
+ *
+ * A band is now the share of the audit at or below you. Cut on the cumulative
+ * distribution rather than on percentile values, because scores tie a lot and
+ * a value cutoff landing inside a tie block empties a whole band. Equal
+ * scores always get equal bands.
+ *
+ * This mirrors the `finding_scores` view in Postgres. If one changes, change
+ * both, and check them against each other.
+ */
+const CUTS: [number, PriorityBand][] = [[0.85, 'P1'], [0.60, 'P2'], [0.30, 'P3']]
+
+/** The absolute fallback, for an audit with nothing to rank against. */
+export function absoluteBand(s: number | null): PriorityBand | null {
   if (s == null) return null
   if (s >= 80) return 'P1'
   if (s >= 55) return 'P2'
   if (s >= 30) return 'P3'
   return 'P4'
+}
+
+/**
+ * Bands for a whole audit at once, which is the only way a relative band can
+ * be worked out. The population is the client-facing findings: an internal
+ * note is not in the deliverable, so letting it pad the bottom would quietly
+ * promote everything the client does see.
+ */
+export function bandsFor(
+  rows: { id: string; score: number | null; exposure?: string }[],
+): Map<string, PriorityBand | null> {
+  const pop = rows
+    .filter((r) => r.score != null && r.exposure !== 'internal')
+    .map((r) => r.score as number)
+    .sort((a, b) => a - b)
+
+  const out = new Map<string, PriorityBand | null>()
+  const flat = pop.length === 0 || pop[0] === pop[pop.length - 1]
+
+  for (const r of rows) {
+    if (r.score == null) { out.set(r.id, null); continue }
+    if (flat) { out.set(r.id, absoluteBand(r.score)); continue }
+    // Share of the population at or below this score.
+    let atOrBelow = 0
+    for (const s of pop) { if (s <= (r.score as number)) atOrBelow++; else break }
+    const cume = atOrBelow / pop.length
+    out.set(r.id, CUTS.find(([c]) => cume > c)?.[1] ?? 'P4')
+  }
+  return out
 }
 
 export const BAND_LABEL: Record<PriorityBand, string> = {
