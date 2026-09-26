@@ -6,12 +6,11 @@ import {
 import type { Audit, Brand, FindingFull } from '../lib/types'
 import FindingEditor from '../components/FindingEditor'
 import LogicEditor from '../components/LogicEditor'
-import ReportSections from '../components/ReportSections'
+import ReportModal from '../components/ReportModal'
+import SheetsModal from '../components/SheetsModal'
+import { exportToDoc } from '../export/gdoc'
 import { STAGE_LABEL, stage } from '../lib/lifecycle'
-import { download, slug, toCsv, toDocument } from '../export/serialize'
-import { buildPrintDocument, printDocument } from '../export/pdf'
 import { identityOf } from '../lib/brand'
-import { PRINT_CSS } from '../export/print.css'
 import { exportToSheets, sheetsConfigured } from '../export/sheets'
 import { supabase } from '../lib/supabase'
 
@@ -49,7 +48,10 @@ export default function AuditView() {
   const [q, setQ] = useState('')
   const [toast, setToast] = useState<{ msg: string; url?: string } | null>(null)
   const [busy, setBusy] = useState(false)
-  const [showSections, setShowSections] = useState(false)
+  // The export dialog resolves the byline and the signed logo URL once on
+  // open, so the preview and the printed file are built from the same inputs.
+  const [report, setReport] = useState<{ byline: string; logoUrl: string | null } | null>(null)
+  const [sheets, setSheets] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -105,31 +107,41 @@ export default function AuditView() {
     setSel(f.id)
   }
 
-  function exportJson() {
-    if (!brand || !audit) return
-    download(`${slug(brand.name)}-${slug(audit.title)}.json`,
-      JSON.stringify(toDocument(brand, audit, findings), null, 2), 'application/json')
-  }
-
-  function exportCsv() {
-    if (!brand || !audit) return
-    download(`${slug(brand.name)}-${slug(audit.title)}.csv`, toCsv(findings), 'text/csv')
-  }
-
   async function exportPdf() {
     if (!brand || !audit) return
     const { data } = await supabase.auth.getUser()
     const byline =
       (data.user?.user_metadata as { full_name?: string })?.full_name ?? data.user?.email ?? ''
-    // The logo lives in a private bucket, so it has to be signed before the
-    // print window can load it. A missing logo is not an error: the cover
-    // simply falls back to the wordmark.
+    // The logo lives in a private bucket, so it has to be signed before either
+    // the preview or the print window can load it. A missing logo is not an
+    // error: the cover falls back to the wordmark.
     const path = identityOf(brand).logo_path
-    const logoUrl = path ? await evidenceUrl(path) : null
-    printDocument(
-      buildPrintDocument(brand, audit, findings, byline, logoUrl),
-      PRINT_CSS, audit.title,
-    )
+    setReport({ byline, logoUrl: path ? await evidenceUrl(path) : null })
+  }
+
+  /** The editable version. Same sections, same brand kit, rebuilt as a Doc. */
+  async function exportDoc() {
+    if (!brand || !audit) return
+    setBusy(true)
+    const tab = window.open('/exporting/', '_blank')
+    try {
+      const { data } = await supabase.auth.getUser()
+      const byline =
+        (data.user?.user_metadata as { full_name?: string })?.full_name ?? data.user?.email ?? ''
+      const url = await exportToDoc(brand, audit, findings, byline)
+      if (tab && !tab.closed) {
+        try { tab.location.replace(url) } catch { tab.location.href = url }
+        say('Doc created in your Drive.')
+      } else {
+        say('Doc created in your Drive.', url)
+      }
+    } catch (e) {
+      const message = (e as Error).message
+      if (!(await reportFailure(tab, message))) tab?.close()
+      say(message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function exportSheets() {
@@ -184,25 +196,14 @@ export default function AuditView() {
           </span>
         </div>
         <span className="grow" />
-        <button className="btn sm" onClick={exportJson}>JSON</button>
-        <button className="btn sm" onClick={exportCsv}>CSV</button>
         <button className="btn sm" onClick={exportPdf}>PDF</button>
-        <button className={'btn sm' + (showSections ? ' pri' : '')}
-          onClick={() => setShowSections((v) => !v)}
-          title="Choose which sections the PDF contains">Sections</button>
-        <button className="btn sm" onClick={exportSheets} disabled={busy || !sheetsConfigured()}
+        <button className="btn sm" onClick={exportDoc} disabled={busy || !sheetsConfigured()}
+          title="An editable Google Doc built from the same sections">Doc</button>
+        <button className="btn sm" onClick={() => setSheets(true)} disabled={busy || !sheetsConfigured()}
           title={sheetsConfigured() ? 'Creates a new sheet in your Drive' : 'Set VITE_GOOGLE_CLIENT_ID to enable'}>
           {busy ? 'Working...' : 'Sheets'}
         </button>
       </div>
-
-      {showSections && (
-        <ReportSections
-          audit={audit}
-          findingCount={findings.length}
-          onChange={setAudit}
-        />
-      )}
 
       <div className="split">
         <div className="list">
@@ -270,6 +271,29 @@ export default function AuditView() {
           )}
         </div>
       </div>
+
+      {sheets && (
+        <SheetsModal
+          audit={audit}
+          findings={findings}
+          busy={busy}
+          onChange={setAudit}
+          onClose={() => setSheets(false)}
+          onExport={() => { setSheets(false); exportSheets() }}
+        />
+      )}
+
+      {report && brand && (
+        <ReportModal
+          audit={audit}
+          brand={brand}
+          findings={findings}
+          byline={report.byline}
+          logoUrl={report.logoUrl}
+          onChange={setAudit}
+          onClose={() => setReport(null)}
+        />
+      )}
 
       {toast && (
         <div className="toast">

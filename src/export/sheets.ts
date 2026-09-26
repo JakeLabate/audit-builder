@@ -1,4 +1,5 @@
 import type { Audit, Brand, FindingFull, PriorityBand } from '../lib/types'
+import { resolveColumns, withRefs, type SheetCol } from '../lib/sheetcols'
 
 /**
  * Google Sheets export.
@@ -89,7 +90,7 @@ export function sheetsConfigured(): boolean {
   return Boolean(id && id.endsWith('.apps.googleusercontent.com'))
 }
 
-async function getToken(): Promise<string> {
+export async function getToken(): Promise<string> {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
   if (!clientId) throw new Error('Google export is not configured. Set VITE_GOOGLE_CLIENT_ID.')
   await loadGsi()
@@ -123,46 +124,11 @@ async function api(token: string, url: string, init?: RequestInit) {
 }
 
 /* ---------- content ---------- */
-const FINDING_COLUMNS = [
-  ['Ref', 90],
-  ['Finding', 340],
-  ['Priority', 90],
-  ['Score', 70],
-  ['Status', 140],
-  ['Owner', 150],
-  ['Effort, days', 110],
-  ['Wave', 70],
-  ['URLs affected', 120],
-  ['Templates', 170],
-  ['What it costs', 380],
-  ['The fix', 380],
-  ['How it will be verified', 330],
-  ['Verify by', 110],
-] as const
 /** Columns whose text is long enough to need wrapping, zero indexed. */
-const WRAPPED = [1, 9, 10, 11, 12]
 
 const TITLE_CASE = (s: string | null) =>
   s ? s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : ''
 
-function findingRow(f: FindingFull) {
-  return [
-    f.ref,
-    f.title,
-    f.band ?? '',
-    f.score ?? '',
-    TITLE_CASE(f.status),
-    f.owner ?? '',
-    f.effort_days ?? '',
-    f.wave ?? '',
-    f.urls_affected ?? '',
-    f.templates.join(', '),
-    f.impact_basis ?? '',
-    f.action ?? '',
-    f.verification_method ?? '',
-    f.verify_by ?? '',
-  ]
-}
 
 export async function exportToSheets(
   brand: Brand,
@@ -173,6 +139,9 @@ export async function exportToSheets(
   const token = await getToken()
   const title = `${brand.name} / ${audit.title}`
   const ordered = [...findings].sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+  // Which columns, in which order. Chosen on the audit, so two exports of the
+  // same audit carry the same register.
+  const cols: SheetCol[] = withRefs(resolveColumns(audit), findings)
 
   const counts: Record<string, number> = { P1: 0, P2: 0, P3: 0, P4: 0 }
   let effort = 0
@@ -188,7 +157,7 @@ export async function exportToSheets(
       properties: { title },
       sheets: [
         { properties: { title: 'Summary', gridProperties: { hideGridlines: true } } },
-        { properties: { title: 'Findings', gridProperties: { frozenRowCount: 1, frozenColumnCount: 2 } } },
+        { properties: { title: 'Findings', gridProperties: { frozenRowCount: 2, frozenColumnCount: 2 } } },
         { properties: { title: 'Roadmap', gridProperties: { frozenRowCount: 1 } } },
         { properties: { title: 'Method', gridProperties: { hideGridlines: true } } },
       ],
@@ -276,7 +245,13 @@ export async function exportToSheets(
         { range: 'Summary!A1', values: summary },
         {
           range: 'Findings!A1',
-          values: [FINDING_COLUMNS.map(([h]) => h), ...ordered.map(findingRow)],
+          values: [
+            cols.map((c) => c.header),
+            // A register goes to people who were not in the audit. A bare
+            // header tells them nothing, so every column says what it means.
+            cols.map((c) => c.note),
+            ...ordered.map((f) => cols.map((c) => c.value(f))),
+          ],
         },
         { range: 'Roadmap!A1', values: roadmap },
         { range: 'Method!A1', values: method },
@@ -299,6 +274,27 @@ export async function exportToSheets(
       /* keep going: the data is already written */
     }
   }
+
+  /** The row under the header. Quieter than the data, italic, wrapped, so it
+   *  reads as guidance and nobody mistakes it for a finding. */
+  const noteRow = (sheetId: number, n: number) => [
+    {
+      repeatCell: {
+        range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: n },
+        cell: {
+          userEnteredFormat: {
+            backgroundColor: WASH,
+            verticalAlignment: 'TOP',
+            wrapStrategy: 'WRAP',
+            padding: { top: 6, bottom: 6, left: 10, right: 10 },
+            textFormat: { foregroundColor: MUTED, italic: true, fontSize: 9 },
+          },
+        },
+        fields: 'userEnteredFormat(backgroundColor,verticalAlignment,wrapStrategy,padding,textFormat)',
+      },
+    },
+    { updateDimensionProperties: { range: { sheetId, dimension: 'ROWS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 56 }, fields: 'pixelSize' } },
+  ]
 
   const headerRow = (sheetId: number, cols: number) => [
     {
@@ -349,37 +345,38 @@ export async function exportToSheets(
 
   // Findings: the register.
   await safeBatch([
-    ...headerRow(FIND, FINDING_COLUMNS.length),
-    ...FINDING_COLUMNS.map(([, w], i) => ({
+    ...headerRow(FIND, cols.length),
+    ...noteRow(FIND, cols.length),
+    ...cols.map((c, i) => ({
       updateDimensionProperties: {
         range: { sheetId: FIND, dimension: 'COLUMNS', startIndex: i, endIndex: i + 1 },
-        properties: { pixelSize: w }, fields: 'pixelSize',
+        properties: { pixelSize: c.width }, fields: 'pixelSize',
       },
     })),
     {
       repeatCell: {
-        range: { sheetId: FIND, startRowIndex: 1, endRowIndex: ordered.length + 1, startColumnIndex: 0, endColumnIndex: FINDING_COLUMNS.length },
+        range: { sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: 0, endColumnIndex: cols.length },
         cell: { userEnteredFormat: { verticalAlignment: 'TOP', padding: { top: 6, bottom: 6, left: 10, right: 10 }, textFormat: { fontSize: 10, foregroundColor: INK_2 } } },
         fields: 'userEnteredFormat(verticalAlignment,padding,textFormat)',
       },
     },
-    ...WRAPPED.map((c) => ({
+    ...cols.flatMap((c, i) => (c.wrap ? [{
       repeatCell: {
-        range: { sheetId: FIND, startRowIndex: 1, endRowIndex: ordered.length + 1, startColumnIndex: c, endColumnIndex: c + 1 },
+        range: { sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: i, endColumnIndex: i + 1 },
         cell: { userEnteredFormat: { wrapStrategy: 'WRAP' } }, fields: 'userEnteredFormat.wrapStrategy',
       },
-    })),
+    }] : [])),
     // the finding itself reads as the row's subject
-    { repeatCell: { range: { sheetId: FIND, startRowIndex: 1, endRowIndex: ordered.length + 1, startColumnIndex: 1, endColumnIndex: 2 }, cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10, foregroundColor: INK } } }, fields: 'userEnteredFormat.textFormat' } },
-    { repeatCell: { range: { sheetId: FIND, startRowIndex: 1, endRowIndex: ordered.length + 1, startColumnIndex: 3, endColumnIndex: 4 }, cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', textFormat: { bold: true, fontSize: 11, foregroundColor: INK } } }, fields: 'userEnteredFormat(horizontalAlignment,textFormat)' } },
-    { repeatCell: { range: { sheetId: FIND, startRowIndex: 1, endRowIndex: ordered.length + 1, startColumnIndex: 2, endColumnIndex: 3 }, cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', textFormat: { bold: true, fontSize: 10 } } }, fields: 'userEnteredFormat(horizontalAlignment,textFormat)' } },
+    { repeatCell: { range: { sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: 1, endColumnIndex: 2 }, cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10, foregroundColor: INK } } }, fields: 'userEnteredFormat.textFormat' } },
+    { repeatCell: { range: { sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: 3, endColumnIndex: 4 }, cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', textFormat: { bold: true, fontSize: 11, foregroundColor: INK } } }, fields: 'userEnteredFormat(horizontalAlignment,textFormat)' } },
+    { repeatCell: { range: { sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: 2, endColumnIndex: 3 }, cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', textFormat: { bold: true, fontSize: 10 } } }, fields: 'userEnteredFormat(horizontalAlignment,textFormat)' } },
     {
       updateBorders: {
-        range: { sheetId: FIND, startRowIndex: 1, endRowIndex: ordered.length + 1, startColumnIndex: 0, endColumnIndex: FINDING_COLUMNS.length },
+        range: { sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: 0, endColumnIndex: cols.length },
         innerHorizontal: { style: 'SOLID', color: LINE },
       },
     },
-    { setBasicFilter: { filter: { range: { sheetId: FIND, startRowIndex: 0, endRowIndex: ordered.length + 1, startColumnIndex: 0, endColumnIndex: FINDING_COLUMNS.length } } } },
+    { setBasicFilter: { filter: { range: { sheetId: FIND, startRowIndex: 0, endRowIndex: ordered.length + 2, startColumnIndex: 0, endColumnIndex: cols.length } } } },
   ])
 
   // Priority column colored by band, so severity reads at a glance.
@@ -388,7 +385,7 @@ export async function exportToSheets(
       addConditionalFormatRule: {
         index: i,
         rule: {
-          ranges: [{ sheetId: FIND, startRowIndex: 1, endRowIndex: ordered.length + 1, startColumnIndex: 2, endColumnIndex: 3 }],
+          ranges: [{ sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: 2, endColumnIndex: 3 }],
           booleanRule: {
             condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: band }] },
             format: { backgroundColor: BAND_BG[band], textFormat: { foregroundColor: BAND_FG[band], bold: true } },
