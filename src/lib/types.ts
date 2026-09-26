@@ -111,6 +111,9 @@ export interface Audit {
   /** manual leaves every field to the consultant. logic generates, derives and
    *  constrains the fields that do not need a human. */
   mode: AuditMode
+  /** Which report sections the deliverable contains, and in what order.
+   *  Read it through sectionsOf, which repairs old and partial values. */
+  sections: unknown
   scope_note: string | null
   sources: AuditSource[]
   gaps: string | null

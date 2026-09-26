@@ -1,6 +1,7 @@
 import type { Audit, Brand, FindingFull } from '../lib/types'
 import { BAND_LABEL } from '../lib/score'
 import { fontHref, identityOf, reportPalette } from '../lib/brand'
+import { sectionsOf, type SectionKey } from '../lib/sections'
 
 /**
  * PDF export. The browser's own print engine does the rendering, so there is
@@ -69,6 +70,129 @@ const row = (k: string, v: unknown, small = false) =>
   v == null || v === ''
     ? ''
     : `<div class="row"><div class="k">${esc(k)}</div><div class="v${small ? ' s' : ''}">${esc(v)}</div></div>`
+
+
+const PILLAR_OF = (f: FindingFull) => f.pillar ?? 'Unsorted'
+
+/** What we found: the shape of the audit before any of the detail. */
+function summaryPage(findings: FindingFull[], counts: Record<string, number>): string {
+  const effort = findings.reduce((n, f) => n + Number(f.effort_days ?? 0), 0)
+  const byPillar = new Map<string, number>()
+  for (const f of findings) byPillar.set(PILLAR_OF(f), (byPillar.get(PILLAR_OF(f)) ?? 0) + 1)
+  const top = [...findings].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 5)
+
+  const bands = (['P1', 'P2', 'P3', 'P4'] as const).map((b) => `
+    <div class="sumband"><b>${counts[b] ?? 0}</b><span>${b}</span></div>`).join('')
+
+  const pillars = [...byPillar.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([p, n]) => `<tr><td>${esc(p)}</td><td class="num">${n}</td></tr>`)
+    .join('')
+
+  const rows = top.map((f) => `<tr>
+      <td class="dt">${esc(f.ref)}</td>
+      <td>${esc(f.title)}</td>
+      <td class="num">${f.score ?? '--'}</td>
+    </tr>`).join('')
+
+  return `<div class="page"><div class="pg">
+    <div class="sect">What we found</div>
+    <h1 class="ttl">${findings.length} findings, ${effort} engineering days of work</h1>
+    <div class="sumbands">${bands}</div>
+    <div class="sect mt">Where they sit</div>
+    <table class="ev tbl-pillar"><tbody>${pillars}</tbody></table>
+    <div class="sect mt">Highest scoring</div>
+    <table class="ev tbl-top"><tbody>${rows}</tbody></table>
+  </div></div>`
+}
+
+/** How the audit was done, and what it could not see. */
+function methodPage(audit: Audit): string {
+  const sources = (audit.sources ?? []).map((s) => `<tr>
+      <td>${esc(s.tool)}</td><td class="dt">${esc(s.window)}</td><td class="dt">${esc(s.confidence)}</td>
+    </tr>`).join('')
+
+  return `<div class="page"><div class="pg">
+    <div class="sect">Method and scope</div>
+    <h1 class="ttl">How this was done</h1>
+    ${audit.scope_note ? `<p class="body mt">${esc(audit.scope_note)}</p>` : ''}
+    ${sources ? `<div class="sect mt">What it was built from</div>
+      <table class="ev tbl-src"><thead><tr><th>Source</th><th>Window</th><th>Confidence</th></tr></thead>
+      <tbody>${sources}</tbody></table>` : ''}
+    ${audit.gaps ? `<div class="sect mt">What it could not see</div>
+      <p class="body">${esc(audit.gaps)}</p>` : ''}
+    <div class="sect mt">How priority is worked out</div>
+    <p class="body">Every finding is scored the same way, so two written weeks apart stay
+      comparable. Effort sits under a square root deliberately: dividing by it outright
+      would make the register recommend nothing but trivia.</p>
+    <div class="formula">score = 3 &times; (severity &times; reach &times; confidence &times; leverage)
+      &divide; sqrt(effort) &times; risk factor, capped at 100</div>
+    <table class="ev tbl-band"><thead><tr><th>Band</th><th>Score</th><th>What it means</th></tr></thead><tbody>
+      <tr><td class="dt">P1</td><td class="num">80 to 100</td><td>Do this first</td></tr>
+      <tr><td class="dt">P2</td><td class="num">55 to 79</td><td>Scheduled work</td></tr>
+      <tr><td class="dt">P3</td><td class="num">30 to 54</td><td>Do alongside</td></tr>
+      <tr><td class="dt">P4</td><td class="num">Under 30</td><td>Monitor</td></tr>
+    </tbody></table>
+  </div></div>`
+}
+
+/** The work, grouped into waves. */
+function roadmapPage(findings: FindingFull[]): string {
+  const waves = new Map<number, FindingFull[]>()
+  for (const f of findings) {
+    const w = f.wave ?? 99
+    if (!waves.has(w)) waves.set(w, [])
+    waves.get(w)!.push(f)
+  }
+  const total = findings.reduce((n, f) => n + Number(f.effort_days ?? 0), 0)
+
+  const blocks = [...waves.entries()].sort((a, b) => a[0] - b[0]).map(([w, items]) => {
+    const eff = items.reduce((n, f) => n + Number(f.effort_days ?? 0), 0)
+    const rows = items.map((f) => `<tr>
+        <td class="dt">${esc(f.ref)}</td>
+        <td>${esc(f.title)}</td>
+        <td class="dt">${esc(f.owner ?? 'unassigned')}</td>
+        <td class="num">${f.effort_days ?? '--'}</td>
+      </tr>`).join('')
+    return `<div class="wave">
+      <div class="wavehd"><span>${w === 99 ? 'Unscheduled' : `Wave ${w}`}</span>
+        <span class="dt">${items.length} ${items.length === 1 ? 'finding' : 'findings'}
+          &nbsp;·&nbsp; ${eff} ${eff === 1 ? 'day' : 'days'}</span></div>
+      <table class="ev tbl-wave"><tbody>${rows}</tbody></table>
+    </div>`
+  }).join('')
+
+  return `<div class="page"><div class="pg">
+    <div class="sect">Roadmap</div>
+    <h1 class="ttl">${total} engineering days, in ${waves.size} ${waves.size === 1 ? 'wave' : 'waves'}</h1>
+    ${blocks}
+  </div></div>`
+}
+
+/** For a client who has not had one of these before. */
+function appendixPage(): string {
+  return `<div class="page"><div class="pg">
+    <div class="sect">How to read this</div>
+    <h1 class="ttl">What each part of a finding page is telling you</h1>
+    <table class="ev"><tbody>
+      <tr><td class="dt">The title</td><td>Stated as a claim, so it is something you can agree
+        or disagree with rather than a topic.</td></tr>
+      <tr><td class="dt">The evidence</td><td>Each check we ran, what it returned, and the date.
+        Every number in the document traces back to one of these rows.</td></tr>
+      <tr><td class="dt">The exhibits</td><td>The problem shown in place, so you do not have to
+        go looking for it.</td></tr>
+      <tr><td class="dt">The score</td><td>Built from severity, how much of the site is affected,
+        how strong the evidence is, how much other work it unblocks, the effort, and the risk of
+        the fix itself. Not a typed opinion.</td></tr>
+      <tr><td class="dt">Effort</td><td>Engineering days, estimated. It feeds the score, which is
+        why a cheap fix can outrank a more serious problem that takes a quarter.</td></tr>
+      <tr><td class="dt">Verify by</td><td>The date the check should be re-run. The check itself
+        was written before the fix, so it is a real test rather than one chosen to pass.</td></tr>
+    </tbody></table>
+    <p class="body mt">If a finding says something you know to be wrong, say so. The record is
+      built to be argued with, and a corrected finding is worth more than a polite one.</p>
+  </div></div>`
+}
 
 export function buildPrintDocument(
   brand: Brand,
@@ -143,8 +267,21 @@ export function buildPrintDocument(
     <div class="foot"><span>Front matter</span><span>${esc(brand.name)} / ${esc(audit.title)}</span><span>2</span></div>
   </div></div>`
 
-  const pages = ordered.map((f, i) => findingPage(f, brand, audit, i + 3)).join('')
-  return `${cover}${index}${pages}`
+  const built: Record<SectionKey, () => string> = {
+    cover: () => cover,
+    summary: () => summaryPage(ordered, counts),
+    contents: () => index,
+    method: () => methodPage(audit),
+    findings: () => ordered.map((f, i) => findingPage(f, brand, audit, i + 3)).join(''),
+    roadmap: () => roadmapPage(ordered),
+    appendix: () => appendixPage(),
+  }
+
+  // The cover carries the brand variables, so when it is switched off the
+  // style block still has to lead or the rest of the document loses the kit.
+  const chosen = sectionsOf(audit).filter((s) => s.on)
+  const body = chosen.map((s) => built[s.key]?.() ?? '').join('')
+  return chosen[0]?.key === 'cover' ? body : `${brandCss}${body}`
 }
 
 /** Opens a print window containing only the document, then invokes print. */

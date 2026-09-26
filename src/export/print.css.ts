@@ -68,4 +68,47 @@ html,body{width:210mm;background:#fff;color:var(--ink);font-family:var(--body);f
 .idx td.n{width:10mm;font-family:var(--mono);font-size:8.4pt;color:var(--muted)}
 .idx td.b{width:14mm;font-family:var(--mono);font-size:8.4pt;color:var(--teal-d);text-align:right}
 .idx td.s{width:14mm;font-family:var(--mono);font-size:9pt;text-align:right}
+
+/* summary, roadmap and appendix */
+.mt{margin-top:7mm}
+.sumbands{display:flex;gap:4mm;margin-top:7mm}
+.sumband{
+  flex:1;border:1px solid var(--line);border-radius:1mm;padding:5mm 4mm;text-align:center;
+  background:var(--brand-wash);
+}
+.sumband b{display:block;font-family:var(--disp);font-weight:700;font-size:20pt;line-height:1;color:var(--brand-ink)}
+.sumband span{
+  font-family:var(--mono);font-size:7.2pt;letter-spacing:.16em;color:var(--muted);
+  text-transform:uppercase;margin-top:2mm;display:block;
+}
+.formula{
+  background:var(--brand-wash);border:1px solid var(--brand-rule);border-radius:1mm;
+  padding:5mm;margin:5mm 0;font-family:var(--mono);font-size:8.6pt;text-align:center;
+  color:var(--brand-ink);line-height:1.6;
+}
+.wave{margin-top:6mm;page-break-inside:avoid}
+.wavehd{
+  display:flex;justify-content:space-between;align-items:baseline;
+  border-bottom:1.5px solid var(--brand);padding-bottom:2mm;margin-bottom:1mm;
+  font-family:var(--disp);font-weight:600;font-size:11pt;color:var(--brand-ink);
+}
+.wavehd .dt{font-family:var(--mono);font-size:8pt;font-weight:400;color:var(--muted)}
+
+/* Column widths. Without these the title column ribbons and the band table
+   runs its score into its description. */
+.tbl-pillar td:first-child{width:auto}
+.tbl-pillar td:last-child{width:18mm;text-align:right}
+.tbl-top td:nth-child(1){width:24mm;white-space:nowrap}
+.tbl-top td:nth-child(2){width:auto}
+.tbl-top td:nth-child(3){width:16mm;text-align:right}
+.tbl-band td:nth-child(1),.tbl-band th:nth-child(1){width:18mm}
+.tbl-band td:nth-child(2),.tbl-band th:nth-child(2){width:26mm;text-align:left}
+.tbl-band td:nth-child(3),.tbl-band th:nth-child(3){width:auto;padding-left:4mm}
+.tbl-src td:nth-child(1),.tbl-src th:nth-child(1){width:auto}
+.tbl-src td:nth-child(2),.tbl-src th:nth-child(2){width:42mm}
+.tbl-src td:nth-child(3),.tbl-src th:nth-child(3){width:22mm;text-align:right}
+.tbl-wave td:nth-child(1){width:24mm;white-space:nowrap}
+.tbl-wave td:nth-child(2){width:auto}
+.tbl-wave td:nth-child(3){width:34mm}
+.tbl-wave td:nth-child(4){width:14mm;text-align:right}
 `

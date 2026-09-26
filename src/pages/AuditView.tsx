@@ -6,6 +6,7 @@ import {
 import type { Audit, Brand, FindingFull } from '../lib/types'
 import FindingEditor from '../components/FindingEditor'
 import LogicEditor from '../components/LogicEditor'
+import ReportSections from '../components/ReportSections'
 import { STAGE_LABEL, stage } from '../lib/lifecycle'
 import { download, slug, toCsv, toDocument } from '../export/serialize'
 import { buildPrintDocument, printDocument } from '../export/pdf'
@@ -48,6 +49,7 @@ export default function AuditView() {
   const [q, setQ] = useState('')
   const [toast, setToast] = useState<{ msg: string; url?: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [showSections, setShowSections] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -185,11 +187,22 @@ export default function AuditView() {
         <button className="btn sm" onClick={exportJson}>JSON</button>
         <button className="btn sm" onClick={exportCsv}>CSV</button>
         <button className="btn sm" onClick={exportPdf}>PDF</button>
+        <button className={'btn sm' + (showSections ? ' pri' : '')}
+          onClick={() => setShowSections((v) => !v)}
+          title="Choose which sections the PDF contains">Sections</button>
         <button className="btn sm" onClick={exportSheets} disabled={busy || !sheetsConfigured()}
           title={sheetsConfigured() ? 'Creates a new sheet in your Drive' : 'Set VITE_GOOGLE_CLIENT_ID to enable'}>
           {busy ? 'Working...' : 'Sheets'}
         </button>
       </div>
+
+      {showSections && (
+        <ReportSections
+          audit={audit}
+          findingCount={findings.length}
+          onChange={setAudit}
+        />
+      )}
 
       <div className="split">
         <div className="list">

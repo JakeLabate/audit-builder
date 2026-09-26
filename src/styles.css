@@ -477,3 +477,68 @@ input, select, textarea { font-size: 16px }
 .kit-swatches i{width:17px;height:17px;border-radius:3px;border:1px solid var(--line);flex:none}
 .kit-swatches span{color:var(--muted);flex:1}
 .kit-swatches code{font-family:var(--mono);font-size:10.5px;color:var(--ink-2)}
+
+/* ============================================================
+   Report sections. Reordering is buttons rather than drag: it is
+   keyboard reachable, it works on a phone, and nobody has ever
+   dropped a section on the floor with an arrow key.
+   ============================================================ */
+.rs{
+  border:1px solid var(--line);background:var(--surface);border-radius:var(--r);
+  padding:18px 20px;margin-bottom:22px;max-width:860px;
+}
+.rs-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+  padding-bottom:13px;border-bottom:1px solid var(--line)}
+.rs-hd h3{font-family:var(--disp);font-weight:600;font-size:15px;color:var(--ink);margin:0}
+.rs-hd p{font-size:12.5px;color:var(--muted);margin:3px 0 0}
+.rs-count{
+  font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;
+  letter-spacing:.06em;text-transform:uppercase;
+}
+.rs-count b{font-family:var(--disp);font-size:17px;color:var(--ink);margin-right:4px}
+
+.rs-list{list-style:none;margin:0;padding:0}
+.rs-row{
+  display:flex;gap:12px;align-items:flex-start;padding:13px 0;
+  border-bottom:1px solid var(--line);
+}
+.rs-row:last-child{border-bottom:none;padding-bottom:0}
+.rs-row.off .rs-name,.rs-row.off .rs-what{color:var(--muted)}
+.rs-row.off .rs-name{font-weight:500}
+
+.rs-move{display:flex;flex-direction:column;gap:2px;flex:none;padding-top:1px}
+.rs-arrow{
+  width:20px;height:16px;line-height:1;padding:0;font-size:11px;cursor:pointer;
+  background:var(--surface);border:1px solid var(--line);border-radius:2px;color:var(--label);
+}
+.rs-arrow:hover:not(:disabled){border-color:var(--teal);color:var(--teal-d)}
+.rs-arrow:disabled{opacity:.3;cursor:not-allowed}
+.rs-arrow:focus-visible{outline:2px solid var(--teal);outline-offset:1px}
+
+.rs-tick{position:relative;flex:none;padding-top:2px;cursor:pointer}
+.rs-tick input{position:absolute;opacity:0;pointer-events:none}
+.rs-box{
+  display:block;width:16px;height:16px;border:1.5px solid var(--line-2);border-radius:3px;
+  background:var(--surface);position:relative;
+}
+.rs-tick input:checked + .rs-box{background:var(--teal);border-color:var(--teal)}
+.rs-tick input:checked + .rs-box::after{
+  content:"";position:absolute;left:4.5px;top:1px;width:4px;height:9px;
+  border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg);
+}
+.rs-tick input:focus-visible + .rs-box{outline:2px solid var(--teal);outline-offset:2px}
+
+.rs-body{flex:1;min-width:0}
+.rs-name{font-size:14px;font-weight:600;color:var(--ink);display:flex;align-items:baseline;
+  gap:9px;flex-wrap:wrap}
+.rs-pages{font-family:var(--mono);font-size:10.5px;font-weight:400;color:var(--muted);
+  letter-spacing:.04em}
+.rs-what{font-size:12.5px;color:var(--muted);margin:3px 0 0;line-height:1.5;max-width:68ch}
+.rs-warn{
+  font-size:12px;color:var(--amber);margin:6px 0 0;padding-left:9px;
+  border-left:2px solid var(--amber);line-height:1.45;
+}
+.rs-note{
+  margin-top:14px;padding:11px 14px;background:#FDF6E7;border-left:3px solid var(--amber);
+  font-size:12.5px;color:var(--ink-2);line-height:1.5;
+}
