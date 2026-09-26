@@ -27,8 +27,46 @@ button,input,select,textarea{font:inherit;color:inherit}
 .crumbs a:hover{color:var(--teal-d)}
 .crumbs b{color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .grow{flex:1}
-.who{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted)}
-.who img{width:24px;height:24px;border-radius:50%}
+/* ---- Account menu ------------------------------------------------------ */
+.acct{position:relative}
+.acct-btn{display:flex;align-items:center;gap:6px;padding:4px 7px 4px 4px;background:none;
+  border:1px solid transparent;border-radius:999px;cursor:pointer;color:var(--muted)}
+.acct-btn:hover,.acct-btn.on{background:var(--wash);border-color:var(--line)}
+.acct-btn img{width:28px;height:28px;border-radius:50%;display:block}
+.acct-init{display:flex;align-items:center;justify-content:center;width:28px;height:28px;
+  border-radius:50%;background:var(--ink);color:#fff;font-family:var(--disp);font-weight:600;
+  font-size:11.5px;letter-spacing:.02em}
+.acct-caret{transition:transform .14s ease}
+.acct-btn.on .acct-caret{transform:rotate(180deg)}
+
+.acct-menu{position:absolute;top:calc(100% + 7px);right:0;min-width:232px;z-index:40;
+  background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);
+  box-shadow:0 2px 6px rgba(25,26,62,.10),0 14px 34px rgba(25,26,62,.13);
+  padding:5px;animation:acct-in .12s ease-out}
+@keyframes acct-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.acct-menu{animation:none}.acct-caret{transition:none}}
+
+.acct-who{padding:9px 11px 10px;border-bottom:1px solid var(--line);margin-bottom:5px}
+.acct-who b{display:block;font-size:13.5px;font-weight:600;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct-who span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.acct-item{display:block;width:100%;text-align:left;padding:9px 11px;font:inherit;font-size:13.5px;
+  color:var(--ink-2);background:none;border:0;border-radius:var(--r);cursor:pointer;
+  text-decoration:none}
+.acct-item:hover{background:var(--wash);color:var(--ink)}
+.acct-item.on{color:var(--ink);font-weight:600;background:var(--wash)}
+.acct-item.danger{color:var(--crim);border-top:1px solid var(--line);border-radius:0 0 var(--r) var(--r);
+  margin-top:5px;padding-top:11px}
+.acct-item.danger:hover{background:#FCF1F2}
+.acct-item:disabled{opacity:.5;cursor:default}
+
+/* The pages live in the header on a wide screen, so the menu does not repeat
+   them. The rule that hides the header nav on a phone lives with the other
+   phone rules further down, because .topnav is defined after this point and
+   a later rule of equal specificity would win. */
+.acct-pages{display:none}
 
 .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
 .wrap.wide{max-width:1420px}
@@ -912,17 +950,17 @@ input, select, textarea { font-size: 16px }
 @media (max-width:760px){
   .top{gap:10px;padding:0 14px;height:52px}
 
+  /* The header has room for a wordmark and an avatar. The pages move into
+     the account menu, which is the one control that fits. */
+  .topnav{display:none}
+  .acct-pages{display:block}
+
   /* "Findings" under the wordmark is decoration, and it costs 70px. */
   .brandmark{font-size:15px}
   .brandmark span{display:none}
 
-  /* The name is already known to the person reading it. The avatar keeps
-     the account visible; Sign out keeps working. */
-  .who>span{display:none}
-  .who{gap:7px}
-
-  .topnav{margin-left:auto;gap:2px}
-  .topnav-l{padding:5px 8px;font-size:12.5px}
+  /* Everything but the wordmark and the avatar moves into the menu. */
+  .acct-menu{min-width:min(268px,calc(100vw - 28px))}
 
   /* Breadcrumbs: the trail matters less than the title on a phone, and
      three links plus a title cannot share 390px. */
@@ -975,6 +1013,8 @@ input, select, textarea { font-size: 16px }
   .fld input,.fld select,.fld textarea,.listbar input,
   .keymint input,.keymint select,.keytab select,.rs-kind input{min-height:44px}
   .topnav-l{min-height:40px;display:inline-flex;align-items:center}
+  .acct-btn{min-height:44px}
+  .acct-item{min-height:44px;display:flex;align-items:center}
   .dlv-a-open,.dlv-a-copy{min-height:40px;display:inline-flex;align-items:center;padding:0 12px}
   /* Checkboxes are drawn at 13px by the browser and cannot be tapped. */
   .keyscope input[type=checkbox]{width:20px;height:20px}
@@ -999,10 +1039,4 @@ input, select, textarea { font-size: 16px }
 .joinbox h2{font-family:var(--disp);font-size:20px;color:var(--ink);margin:0 0 8px}
 .joinbox p{font-size:14px;line-height:1.6;color:var(--ink-2);margin:0 0 16px}
 
-/* Three nav items do not fit a phone at their desktop labels. */
-.nav-short{display:none}
-@media (max-width:760px){
-  .nav-long{display:none}
-  .nav-short{display:inline}
-  .keytab .you{font-size:10px}
-}
+@media (max-width:760px){ .keytab .you{font-size:10px} }
