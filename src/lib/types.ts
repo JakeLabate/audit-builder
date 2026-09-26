@@ -89,6 +89,7 @@ export interface Brand {
   domain: string | null
   primary_color: string | null
   logo_path: string | null
+  is_sample?: boolean
   notes: string | null
   /** The brand kit the report generator draws from: logos, colours, slogan,
    *  typography, voice and the client contact. Read it through identityOf. */
@@ -110,6 +111,10 @@ export interface Audit {
   /** What kind of document this is, printed on the cover. Null means the
    *  neutral default: not every audit is a technical one. */
   kind: string | null
+  /** Seeded on signup so a new workspace is not empty. The app says so, and
+   *  says it is safe to delete, because a sample masquerading as real work is
+   *  worse than no sample at all. */
+  is_sample: boolean
   status: AuditStatus
   /** manual leaves every field to the consultant. logic generates, derives and
    *  constrains the fields that do not need a human. */

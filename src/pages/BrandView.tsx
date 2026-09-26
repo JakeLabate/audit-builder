@@ -126,10 +126,19 @@ export default function BrandView() {
           {audits.map((a) => (
             <div className="card" key={a.id}>
               <Link to={`/audit/${a.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                <h3>{a.title} <span className={'modetag ' + a.mode}>{a.mode === 'logic' ? 'Logic' : 'Manual'}</span></h3>
+                <h3>{a.title}{' '}
+                  <span className={'modetag ' + a.mode}>{a.mode === 'logic' ? 'Logic' : 'Manual'}</span>
+                  {a.is_sample && <span className="modetag sample">Sample</span>}
+                </h3>
                 <div className="meta">
                   {a.status} &nbsp;·&nbsp; {new Date(a.created_at).toLocaleDateString()}
                 </div>
+                {a.is_sample && (
+                  <p className="samplenote">
+                    Made up, so you have something to look at. Open it, then try Export.
+                    Delete it whenever you like.
+                  </p>
+                )}
               </Link>
               <div className="row2">
                 <Link className="btn sm" to={`/audit/${a.id}`}>Open</Link>
