@@ -593,8 +593,11 @@ function History({ findingId, version }: { findingId: string; version: string })
 
   return (
     <section className="grp">
-      <h4>History</h4>
-      <p className="purpose">Every tracked change, who made it, and when. The audit-day record is always recoverable from here.</p>
+      <div className="grp-l">
+        <h4>History</h4>
+        <p className="purpose">Every tracked change, who made it, and when. The audit-day record is always recoverable from here.</p>
+      </div>
+      <div className="grp-b">
       {!open ? (
         <button className="btn sm" onClick={() => setOpen(true)}>Show history</button>
       ) : rows == null ? (
@@ -614,6 +617,7 @@ function History({ findingId, version }: { findingId: string; version: string })
           ))}
         </div>
       )}
+      </div>
     </section>
   )
 }
@@ -720,9 +724,11 @@ function G({
 }) {
   return (
     <section className="grp">
-      <h4>{name}</h4>
-      <p className="purpose">{purpose}</p>
-      {children}
+      <div className="grp-l">
+        <h4>{name}</h4>
+        <p className="purpose">{purpose}</p>
+      </div>
+      <div className="grp-b">{children}</div>
     </section>
   )
 }

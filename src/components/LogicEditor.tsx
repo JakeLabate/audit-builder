@@ -55,7 +55,7 @@ function D({
 function Group({ name, children }: { name: string; children: React.ReactNode }) {
   return (
     <section className="lgrp">
-      <h3>{name}</h3>
+      <div className="lgrp-l"><h3>{name}</h3></div>
       <div className="lgrid">{children}</div>
     </section>
   )

@@ -1083,3 +1083,78 @@ input, select, textarea { font-size: 16px }
 .cascade-b{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
 @media (max-width:700px){.mrow{grid-template-columns:minmax(0,1fr) auto}.mrow>select,.mrow>input:nth-of-type(2){grid-column:1/2}}
 .lwide{grid-column:1/-1;min-width:0}
+
+/* ======================================================================
+   Design round two: ink chrome (option A) and label-column groups (A2).
+   Later rules of equal specificity win, so these sit at the end.
+   ====================================================================== */
+:root{
+  --line:#D6D7E6; --line-2:#A9ABC8; --bg:#F1F2F8;
+  --chrome:#191A3E; --chrome-2:#222451; --chrome-3:#1E1F47; --chrome-hi:#2C2E63;
+  --chrome-line:#2E3066; --chrome-edge:#45478A; --chrome-field:#2A2C5C;
+  --chrome-text:#E8E9F5; --chrome-soft:#C3C5E3; --chrome-muted:#A9ABD0; --chrome-accent:#2BC4C1;
+}
+
+/* top bar and the audit's breadcrumb bar */
+.top{background:var(--chrome);border-bottom:1px solid var(--chrome-line);color:var(--chrome-text)}
+.top.sub{background:var(--chrome-2);height:46px}
+.brandmark{color:#fff}
+.brandmark span{color:var(--chrome-muted)}
+.topnav-l{color:var(--chrome-soft)}
+.topnav-l:hover{color:#fff;background:rgba(255,255,255,.07)}
+.topnav-l.on{color:#fff;background:transparent;font-weight:600;border-radius:0;box-shadow:inset 0 -2px 0 var(--chrome-accent)}
+.acct-btn{color:var(--chrome-soft)}
+.acct-btn:hover,.acct-btn.on{background:var(--chrome-hi);border-color:var(--chrome-edge)}
+.acct-init{background:var(--chrome-hi);border:1px solid var(--chrome-edge)}
+.crumbs,.crumbs a{color:var(--chrome-muted)}
+.crumbs a:hover{color:#fff}
+.crumbs b{color:#fff}
+.top .modetag{border-color:var(--chrome-edge);color:var(--chrome-soft);background:transparent}
+.top .modetag.logic{border-color:var(--chrome-accent);color:var(--chrome-accent)}
+.top .btn{background:transparent;border-color:var(--chrome-edge);color:#fff}
+.top .btn:hover{border-color:var(--chrome-accent);color:#fff}
+.top .btn.pri{background:#0B7F7D;border-color:#0B7F7D;color:#fff}
+.top .btn.pri:hover{background:var(--teal-d);border-color:var(--teal-d)}
+
+/* findings sidebar */
+.list{background:var(--chrome-3);border-right-color:var(--chrome-line)}
+.listbar{background:var(--chrome-3);border-bottom-color:var(--chrome-line)}
+.listbar input{background:var(--chrome-field);border-color:var(--chrome-edge);color:#fff}
+.listbar input::placeholder{color:var(--chrome-muted)}
+.listbar .btn.pri{background:#fff;border-color:#fff;color:var(--ink)}
+.listbar .btn.pri:hover{background:var(--chrome-text);border-color:var(--chrome-text);color:var(--ink)}
+.frow{border-bottom-color:var(--chrome-line)}
+.frow:hover{background:#25275A}
+.frow[aria-selected=true]{background:var(--chrome-hi);box-shadow:inset 3px 0 0 var(--chrome-accent)}
+.frow .ref{color:var(--chrome-muted)}
+.frow[aria-selected=true] .ref{color:var(--chrome-soft)}
+.frow .nm{color:var(--chrome-text)}
+.frow[aria-selected=true] .nm{color:#fff}
+.frow .nm span,.frow .untitled{color:var(--chrome-muted)}
+.list .pill.P1{background:#B23A4B} .list .pill.P2{background:#9A6A10}
+.list .pill.P3{background:#5E51B5} .list .pill.P4{background:#5A5C8A}
+.list .pill.none{background:transparent;color:var(--chrome-muted);border-color:var(--chrome-edge)}
+.list .stagesum{background:var(--chrome-3);border-bottom-color:var(--chrome-line)}
+.list .stg-chip{background:var(--chrome-field);border-color:var(--chrome-edge);color:var(--chrome-text)}
+.list .stg-chip b{color:#fff}
+.list .stg-chip:hover{border-color:var(--chrome-accent)}
+.list .stg-chip.on{background:#fff;border-color:#fff;color:var(--ink)}
+.list .stg-chip.on b{color:var(--ink)}
+.list .stg-dot.verified,.list .stg-dot.measured{background:#fff}
+.list .stg-dot.internal{background:var(--chrome-muted)}
+.list-empty{padding:24px;color:var(--chrome-muted);font-size:13.5px}
+
+/* field groups: number, name and purpose in a label column, fields in a
+   card beside it, a heavy rule between groups so each reads as its own */
+.pane,.logic{counter-reset:grp}
+.grp,.lgrp{display:flex;flex-wrap:wrap;gap:18px 28px;max-width:1000px;margin:0;padding:26px 0;
+  background:transparent;border:0;border-top:2px solid var(--ink);border-radius:0;counter-increment:grp}
+.grp-l,.lgrp-l{flex:1 1 190px;max-width:220px}
+.grp-l::before,.lgrp-l::before{content:counter(grp,decimal-leading-zero);display:block;margin-bottom:8px;
+  font-family:var(--disp);font-weight:700;font-size:34px;line-height:1;letter-spacing:-.03em;color:#8587B0}
+.grp-l h4,.lgrp-l h3{font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:-.02em;
+  color:var(--ink);margin:0 0 6px;padding:0;border:0;text-transform:none}
+.grp-l .purpose{font-size:13px;color:#5E6091;margin:0;line-height:1.5;max-width:none}
+.grp-b,.lgrp .lgrid{flex:999 1 420px;min-width:0;background:var(--surface);border:1px solid var(--line-2)}
+.grp-b{padding:20px 22px 6px}
+.lgrp .lgrid{padding:18px}

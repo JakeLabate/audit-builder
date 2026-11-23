@@ -107,7 +107,7 @@ export default function AuditView() {
 
   return (
     <>
-      <div className="top" style={{ borderTop: '1px solid var(--line)', height: 46 }}>
+      <div className="top sub">
         <div className="crumbs">
           <Link to="/">Brands</Link><span>/</span>
           <Link to={`/brand/${brand.id}`}>{brand.name}</Link><span>/</span>
@@ -137,7 +137,7 @@ export default function AuditView() {
             </div>
           )}
           {shown.length === 0 ? (
-            <div style={{ padding: 24, color: 'var(--muted)', fontSize: 13.5 }}>
+            <div className="list-empty">
               No findings yet. Every finding is the same 53 fields, so start one and fill what you know.
             </div>
           ) : (
@@ -145,7 +145,7 @@ export default function AuditView() {
               <div className="frow" key={f.id} aria-selected={f.id === sel} onClick={() => setSel(f.id)}>
                 <span className="ref">{f.ref}</span>
                 <span className="nm">
-                  {f.title || <em style={{ color: 'var(--muted)' }}>Untitled</em>}
+                  {f.title || <em className="untitled">Untitled</em>}
                   <span>
                     <i className={`stg-dot ${stage(f, audit.status)}`} />{STAGE_LABEL[stage(f, audit.status)]}
                     &nbsp;·&nbsp; {f.owner ?? 'no owner'} &nbsp;·&nbsp; {f.examples.length} exhibits
