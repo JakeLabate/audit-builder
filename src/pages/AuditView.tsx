@@ -107,7 +107,7 @@ export default function AuditView() {
 
   return (
     <>
-      <div className="top sub">
+      <div className="top crumbbar">
         <div className="crumbs">
           <Link to="/">Brands</Link><span>/</span>
           <Link to={`/brand/${brand.id}`}>{brand.name}</Link><span>/</span>
