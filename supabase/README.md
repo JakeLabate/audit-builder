@@ -1,7 +1,7 @@
 # Database
 
 The schema lives in the Supabase project `auditbuilder` (`vvekkbboqqkxnlpmxazh`).
-Seven migrations are applied, in order (the SQL for the newest lives in `supabase/migrations/`):
+Nine migrations are applied, in order (the SQL for the newest lives in `supabase/migrations/`):
 
 | Version | Name | What it does |
 |---|---|---|
@@ -12,6 +12,8 @@ Seven migrations are applied, in order (the SQL for the newest lives in `supabas
 | 20260904204155 | `evidence_storage` | Private `evidence` bucket with per-tenant storage policies |
 | 20260912000000 | `finding_lifecycle` | Post-delivery columns on `findings` (exposure, client decision, acceptance_checks, last check, outcome), append-only `finding_history` with trigger, `private.record_check` for the verifier, `finding_lifecycle` view with a derived `stage` |
 | 20260912000200 | `verifier_api` | `verifier_queue` and `verifier_record`, service-role only, the verifier worker's whole database surface (see `verifier/`) |
+| 20261123000000 | `field_review` | Audit `started_on` and evidence window, finding `scope` (segments plus an optional URL list), workspace `tools` table with RLS, two logic-mode rules retired, `seed_sample` copies the new columns |
+| 20261123000100 | `sample_taxonomy` | Moves the sample audit and every seeded copy onto the universal taxonomy, the new references, tools on every measurement row and scope segments |
 
 ## Pull them into this repo
 

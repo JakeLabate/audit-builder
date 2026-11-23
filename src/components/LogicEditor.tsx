@@ -3,9 +3,11 @@ import type { Audit, Brand, Finding, FindingFull } from '../lib/types'
 import { updateFinding } from '../lib/api'
 import { BAND_LABEL, riskFactor, score as scoreOf } from '../lib/score'
 import {
-  blockers, deriveConfidenceFactor, deriveLeverage, deriveReach, deriveRef, deriveVerifyBy,
-  deriveWave, deriveWindow, EFFORT_BUCKETS, NEXT_STATUS, registryOf,
+  blockers, deriveConfidenceFactor, deriveLeverage, deriveRef, deriveVerifyBy,
+  deriveWave, EFFORT_BUCKETS, NEXT_STATUS, registryOf,
 } from '../lib/derive'
+import { CategoryPicker, EvidenceWindow, MeasurementsEditor, ScopeEditor } from './Fields'
+import { sourcesFrom } from '../lib/tools'
 
 /**
  * The logic-mode editor.
@@ -60,13 +62,14 @@ function Group({ name, children }: { name: string; children: React.ReactNode }) 
 }
 
 export default function LogicEditor({
-  finding, audit, brand, all, onSaved,
+  finding, audit, brand, all, onSaved, onBrand,
 }: {
   finding: FindingFull
   audit: Audit
   brand: Brand | null
   all: FindingFull[]
   onSaved: (f: FindingFull) => void
+  onBrand?: (b: Brand) => void
 }) {
   const [f, setF] = useState<FindingFull>(finding)
   const [saving, setSaving] = useState(false)
@@ -82,9 +85,8 @@ export default function LogicEditor({
   )
 
   /* ---- everything the system works out, recomputed on every keystroke ---- */
-  const ref = deriveRef(f.pillar, reg, otherRefs, f.ref)
-  const win = deriveWindow(f)
-  const reach = deriveReach(f, reg)
+  const frozenRef = audit.status !== 'draft'
+  const ref = frozenRef ? { value: f.ref, how: 'Issued from the category.' } : deriveRef(f.pillar, otherRefs, f.ref)
   const cfac = deriveConfidenceFactor(f)
   const lev = deriveLeverage(f, all)
   const vby = deriveVerifyBy(f, reg)
@@ -92,9 +94,6 @@ export default function LogicEditor({
   const live: Finding = {
     ...f,
     ref: ref.value,
-    collected_from: win.value.from,
-    collected_to: win.value.to,
-    reach: reach.value,
     confidence_factor: cfac.value,
     leverage: lev.value,
     verify_by: vby.value,
@@ -109,6 +108,7 @@ export default function LogicEditor({
   function set<K extends keyof Finding>(k: K, v: Finding[K]) {
     setF((p) => ({ ...p, [k]: v }))
   }
+  const setMany = (p: Partial<FindingFull>) => setF((x) => ({ ...x, ...p }))
 
   /* Autosave writes the derived values too, so the row and the screen agree. */
   useEffect(() => {
@@ -119,8 +119,9 @@ export default function LogicEditor({
       setSaving(true)
       setErr(null)
       const patch: Partial<Finding> = {
-        title: f.title, pillar: f.pillar, urls_affected: f.urls_affected,
+        title: f.title, pillar: f.pillar, raised: f.raised, scope: f.scope, urls_affected: f.urls_affected,
         templates: f.templates, markets: f.markets, source: f.source,
+        collected_from: f.collected_from, collected_to: f.collected_to, reach: f.reach,
         measurements: f.measurements, confidence: f.confidence,
         confidence_reason: f.confidence_reason, impact_type: f.impact_type,
         metric_at_risk: f.metric_at_risk, quantity_value: f.quantity_value,
@@ -133,8 +134,7 @@ export default function LogicEditor({
         status: f.status, verification_method: f.verification_method,
         verified_on: f.verified_on, closed_note: f.closed_note,
         // the generated and derived ones
-        ref: ref.value, collected_from: win.value.from, collected_to: win.value.to,
-        reach: reach.value, confidence_factor: cfac.value, leverage: lev.value,
+        ref: ref.value, confidence_factor: cfac.value, leverage: lev.value,
         wave: wave.value, verify_by: vby.value,
       }
       if (frozen) delete patch.ref
@@ -177,59 +177,39 @@ export default function LogicEditor({
       <Group name="Identity">
         <D label="Reference" kind="Generated"
            value={<code>{ref.value}</code>}
-           how={frozen
+           how={frozenRef
              ? `${ref.how} The audit is ${audit.status.replace('_', ' ')}, so this is now a citation in a delivered document and cannot change.`
              : ref.how} />
-        <M label="Pillar" note="Picked from this brand's registry. It issues the reference prefix.">
-          <select value={f.pillar ?? ''} onChange={(e) => set('pillar', e.target.value || null)}>
-            <option value="">Not set</option>
-            {reg.pillars.map((p) => <option key={p.code} value={p.name}>{p.name} · {p.code}</option>)}
-          </select>
+        <M label="Category" note="Pick the area this belongs to. It sets the reference code.">
+          <CategoryPicker value={f.pillar} onChange={(v) => set('pillar', v)} />
         </M>
-        <M label="Title, stated as a claim">
+        <M label="Title" note="What is wrong, stated as a claim someone could disagree with.">
           <textarea rows={2} value={f.title} onChange={(e) => set('title', e.target.value)} />
+          {f.title.length > 110 && <p className="fwarn">{f.title.length} characters. Over 110 may not fit the PDF page.</p>}
         </M>
-        <D label="Raised" kind="Generated" value={f.raised}
-           how="Stamped when the finding was created. It starts the clock, so it is not editable." />
+        <M label="Found on" note="The day this was found. Defaults to the audit's start date.">
+          <input type="date" value={f.raised} onChange={(e) => e.target.value && set('raised', e.target.value)} />
+        </M>
       </Group>
 
       <Group name="Scope">
-        <D label="URLs affected" kind="Imported" value={f.urls_affected ?? ''}
-           how="Comes off the crawl. Typing it by hand is how the number drifts from the evidence." />
-        <M label="Templates" note="From the registry. Each one carries a universe, which is what makes reach arithmetic.">
-          <div className="lchips">
-            {reg.templates.map((t) => (
-              <label key={t.name} className={'lchip' + (f.templates.includes(t.name) ? ' on' : '')}>
-                <input type="checkbox" checked={f.templates.includes(t.name)}
-                  onChange={(e) => set('templates', e.target.checked
-                    ? [...f.templates, t.name]
-                    : f.templates.filter((x) => x !== t.name))} />
-                {t.name} <span>{t.universe.toLocaleString('en-US')}</span>
-              </label>
-            ))}
-          </div>
-        </M>
-        <M label="Markets" note="Constrained to the markets this brand actually operates.">
-          <div className="lchips">
-            {reg.markets.map((m) => (
-              <label key={m} className={'lchip' + (f.markets.includes(m) ? ' on' : '')}>
-                <input type="checkbox" checked={f.markets.includes(m)}
-                  onChange={(e) => set('markets', e.target.checked
-                    ? [...f.markets, m]
-                    : f.markets.filter((x) => x !== m))} />
-                {m}
-              </label>
-            ))}
-          </div>
-        </M>
+        <div className="lwide">
+          <ScopeEditor finding={f} brand={brand} onBrand={onBrand} onChange={(p) => setMany(p)} />
+        </div>
       </Group>
 
       <Group name="Evidence">
-        <D label="Collected from" kind="Derived" value={win.value.from ?? ''} how={win.how} />
-        <D label="Collected to" kind="Derived" value={win.value.to ?? ''} how={win.how} />
-        <M label="Sources" note="Comma separated. Must be tools the audit declared, or the save is refused.">
-          <input value={list(f.source)} onChange={(e) => set('source', toList(e.target.value))} />
-        </M>
+        <div className="lwide">
+          <MeasurementsEditor value={f.measurements} orgId={f.org_id}
+            onChange={(rows) => {
+              const derived = sourcesFrom(rows)
+              setMany({ measurements: rows, source: derived.length ? derived : f.source })
+            }} />
+        </div>
+        <D label="Sources" kind="Derived" value={f.source.join(' · ')}
+           how="The distinct tools on the measurement rows, in the order they first appear." />
+        <EvidenceWindow from={f.collected_from} to={f.collected_to}
+          onChange={(from, to) => setMany({ collected_from: from, collected_to: to })} />
         <M label="Confidence">
           <select value={f.confidence ?? ''} onChange={(e) => set('confidence', (e.target.value || null) as never)}>
             <option value="">Not set</option>
@@ -239,7 +219,7 @@ export default function LogicEditor({
           </select>
         </M>
         {f.confidence && f.confidence !== 'high' && (
-          <M label="Reason it is not high" note="Required whenever confidence is below high.">
+          <M label="Confidence reason" note="Why confidence is not high.">
             <textarea rows={2} value={f.confidence_reason ?? ''}
               onChange={(e) => set('confidence_reason', e.target.value)} />
           </M>
@@ -353,13 +333,22 @@ export default function LogicEditor({
             <option value="5">5 · someone outside marketing notices</option>
           </select>
         </M>
-        <D label="Reach" kind="Derived" value={reach.value ?? ''} how={reach.how} />
+        <M label="Reach" note="Judged for now. It will come from Search Console clicks on the uploaded URLs.">
+          <select value={f.reach ?? ''} onChange={(e) => set('reach', e.target.value === '' ? null : Number(e.target.value))}>
+            <option value="">Not set</option>
+            <option value="1">1.0 · every relevant page</option>
+            <option value="0.75">0.75 · most of them</option>
+            <option value="0.5">0.5 · about half</option>
+            <option value="0.25">0.25 · a minority</option>
+            <option value="0.1">0.1 · a handful</option>
+          </select>
+        </M>
         <D label="Confidence factor" kind="Derived" value={cfac.value?.toFixed(1) ?? ''} how={cfac.how} />
         <D label="Leverage" kind="Derived" value={lev.value} how={lev.how} />
         <D label="Score" kind="Computed" value={sc ?? ''}
            how={sc == null
              ? 'Needs severity and effort.'
-             : `3 times (${f.severity_weight} severity times ${reach.value ?? 1} reach times ${cfac.value ?? 1} confidence times ${lev.value} leverage) over the square root of ${f.effort_days} effort days, times ${rf.toFixed(2)} risk factor, capped at 100.`} />
+             : `3 times (${f.severity_weight} severity times ${f.reach ?? 1} reach times ${cfac.value ?? 1} confidence times ${lev.value} leverage) over the square root of ${f.effort_days} effort days, times ${rf.toFixed(2)} risk factor, capped at 100.`} />
       </Group>
 
       <Group name="Lifecycle">

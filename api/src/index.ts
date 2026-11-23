@@ -164,7 +164,7 @@ const index = (origin: string) => ({
     'GET    /v1/audits/:id/findings',
     'GET    /v1/audits/:id/roadmap',
     'GET    /v1/audits/:id/export?format=json|csv|markdown',
-    'GET    /v1/findings?audit_id=&status=&pillar=&owner=&wave=&q=',
+    'GET    /v1/findings?audit_id=&status=&category=&owner=&wave=&q=',
     'POST   /v1/findings',
     'GET    /v1/findings/:id',
     'PATCH  /v1/findings/:id',

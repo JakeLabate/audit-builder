@@ -1,4 +1,5 @@
 import type { Audit, Brand, FindingFull } from '../lib/types'
+import { categoryOf } from '../lib/taxonomy'
 import { BAND_LABEL } from '../lib/score'
 import { fontHref, identityOf, reportPalette } from '../lib/brand'
 import { sectionsOf, type SectionKey } from '../lib/sections'
@@ -68,7 +69,7 @@ function findingPage(
   const rows = f.measurements.slice(0, d.measurements)
     .map(
       (m, i) =>
-        `<tr${drop(i, keepM, 50)}><td><span>${esc(m.check)}</span></td><td class="num">${esc(m.result)}</td><td class="dt">${esc(m.taken)}</td></tr>`,
+        `<tr${drop(i, keepM, 50)}><td><span>${esc(m.check)}</span></td><td class="num">${esc(m.result)}</td><td class="dt">${esc(m.tool ?? m.taken ?? '')}</td></tr>`,
     )
     .join('')
   const steps = f.steps
@@ -128,7 +129,7 @@ const row = (k: string, v: unknown, small = false) =>
     : `<div class="row"><div class="k">${esc(k)}</div><div class="v${small ? ' s' : ''}">${esc(v)}</div></div>`
 
 
-const PILLAR_OF = (f: FindingFull) => f.pillar ?? 'Unsorted'
+const PILLAR_OF = (f: FindingFull) => categoryOf(f.pillar)
 
 /** What we found: the shape of the audit before any of the detail. */
 function summaryPage(findings: FindingFull[], counts: Record<string, number>): string {

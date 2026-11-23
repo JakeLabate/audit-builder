@@ -4,6 +4,8 @@
  * impact, remedy, risk, priority, lifecycle.
  */
 
+import type { Scope } from './scope'
+
 export type MembershipRole = 'owner' | 'editor' | 'viewer'
 export type FindingStatus =
   | 'open' | 'in_progress' | 'fixed' | 'verified' | 'reopened' | 'accepted_risk'
@@ -127,11 +129,18 @@ export interface Audit {
   gaps: string | null
   urls_crawled: number | null
   delivered_on: string | null
+  /** The default "Found on" for every finding in this audit. */
+  started_on: string | null
+  /** The default evidence window for every finding in this audit. */
+  evidence_from: string | null
+  evidence_to: string | null
   created_at: string
   updated_at: string
 }
 
-export interface Measurement { check: string; result: string; taken: string }
+/** One check. `tool` is "Tool › Report" from the universal or workspace list.
+ *  `taken` is legacy: rows written before tools carry a date instead. */
+export interface Measurement { check: string; result: string; tool?: string | null; taken?: string }
 
 export interface Finding {
   id: string
@@ -139,13 +148,19 @@ export interface Finding {
   audit_id: string
 
   // identity
+  /** Category/Subcategory/n, issued from the category, frozen once delivered. */
   ref: string
   title: string
+  /** The category path, e.g. Crawling/Redirects. Older rows hold a free-text pillar. */
   pillar: string | null
+  /** Shown as "Found on". Defaults from the audit's start date. */
   raised: string
 
   // scope
+  scope: Scope
+  /** Worked out from the scope; blank when it cannot be counted. */
   urls_affected: number | null
+  /** Kept in step with the template segments, for older readers. */
   templates: string[]
   markets: string[]
 

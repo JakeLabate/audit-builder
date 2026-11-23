@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import type { AuditMode, Audit, Brand, Example, Finding, FindingFull, FindingHistory, Org } from './types'
 import { absoluteBand, bandsFor, riskFactor, score } from './score'
+import { nextRefFor } from './taxonomy'
 
 /** RLS does the filtering, so no query here passes an org id as a filter. */
 
@@ -105,29 +106,48 @@ export function withBands(rows: FindingFull[]): FindingFull[] {
   return rows.map((f) => ({ ...f, band: bands.get(f.id) ?? f.band }))
 }
 
-export async function nextRef(auditId: string, pillarPrefix: string): Promise<string> {
-  const { data, error } = await supabase.from('findings').select('ref').eq('audit_id', auditId)
+/** Category/Subcategory/n: the first free number for that path in this audit. */
+export async function nextRef(auditId: string, categoryPath: string | null, exceptId?: string): Promise<string> {
+  const { data, error } = await supabase.from('findings').select('id, ref').eq('audit_id', auditId)
   if (error) throw error
-  const used = new Set((data ?? []).map((r) => r.ref))
-  let n = 1
-  while (used.has(`${pillarPrefix}-${String(n).padStart(3, '0')}`)) n++
-  return `${pillarPrefix}-${String(n).padStart(3, '0')}`
+  return nextRefFor(categoryPath, (data ?? []).filter((r) => r.id !== exceptId).map((r) => r.ref))
 }
 
+/** A new finding takes its dates from the audit, so nobody types them. */
 export async function createFinding(
   orgId: string,
   auditId: string,
   ref: string,
   title: string,
   position: number,
+  defaults: Partial<Pick<Finding, 'raised' | 'collected_from' | 'collected_to'>> = {},
 ): Promise<FindingFull> {
+  const row: Record<string, unknown> = { org_id: orgId, audit_id: auditId, ref, title, position }
+  for (const [k, v] of Object.entries(defaults)) if (v) row[k] = v
   const { data, error } = await supabase
     .from('findings')
-    .insert({ org_id: orgId, audit_id: auditId, ref, title, position })
+    .insert(row)
     .select('*, examples(*)')
     .single()
   if (error) throw error
   return decorate(data)
+}
+
+/** One patch to many findings, for the audit date cascade. */
+export async function updateFindings(ids: string[], patch: Partial<Finding>): Promise<void> {
+  if (ids.length === 0) return
+  const { error } = await supabase.from('findings').update(patch).in('id', ids)
+  if (error) throw error
+}
+
+/** An uploaded URL list is stored as plain text, one URL per line, already
+ *  stripped of duplicates. The finding keeps only its path and count. */
+export async function uploadUrlList(orgId: string, findingId: string, urls: string[]): Promise<string> {
+  const path = `${orgId}/urls-${findingId}-${crypto.randomUUID()}.txt`
+  const body = new Blob([urls.join('\n')], { type: 'text/plain' })
+  const { error } = await supabase.storage.from('evidence').upload(path, body, { upsert: false })
+  if (error) throw error
+  return path
 }
 
 export async function updateFinding(id: string, patch: Partial<Finding>): Promise<void> {

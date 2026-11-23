@@ -1,4 +1,5 @@
 import type { Audit, Brand, Example, FindingFull } from '../lib/types'
+import { describeScope, scopeOf } from '../lib/scope'
 
 /**
  * The canonical record shape. Nested by field group, matching the published
@@ -7,10 +8,10 @@ import type { Audit, Brand, Example, FindingFull } from '../lib/types'
  */
 export function toRecord(f: FindingFull) {
   return {
-    identity: { id: f.ref, title: f.title, pillar: f.pillar, raised: f.raised },
+    identity: { id: f.ref, title: f.title, category: f.pillar, found_on: f.raised },
     scope: {
+      segments: scopeOf(f.scope).segments,
       urls_affected: f.urls_affected,
-      templates: f.templates,
       markets: f.markets,
     },
     evidence: {
@@ -124,21 +125,21 @@ export function toDocument(brand: Brand, audit: Audit, findings: FindingFull[]) 
 
 /** The flat projection. One row per finding, stable column order. */
 export const CSV_COLUMNS = [
-  'ref', 'title', 'pillar', 'band', 'score', 'status',
-  'urls_affected', 'templates', 'markets',
+  'ref', 'title', 'category', 'band', 'score', 'status',
+  'urls_affected', 'scope', 'markets',
   'impact_type', 'metric_at_risk', 'quantity_value', 'quantity_unit', 'impact_basis',
   'action', 'owner', 'effort_days', 'wave', 'dependencies',
   'severity_weight', 'reach', 'confidence_factor', 'leverage', 'risk_factor',
   'blast_radius', 'failure_likelihood', 'reversibility',
   'confidence', 'source', 'collected_from', 'collected_to', 'example_count',
-  'verification_method', 'verify_by', 'verified_on', 'raised',
+  'verification_method', 'verify_by', 'verified_on', 'found_on',
 ] as const
 
 export function toRow(f: FindingFull): (string | number | null)[] {
   const j = (a: string[]) => (a.length ? a.join('; ') : null)
   return [
     f.ref, f.title, f.pillar, f.band, f.score, f.status,
-    f.urls_affected, j(f.templates), j(f.markets),
+    f.urls_affected, describeScope(scopeOf(f.scope)), j(f.markets),
     f.impact_type, f.metric_at_risk, f.quantity_value, f.quantity_unit, f.impact_basis,
     f.action, f.owner, f.effort_days, f.wave, j(f.dependencies),
     f.severity_weight, f.reach, f.confidence_factor, f.leverage, f.risk_factor,

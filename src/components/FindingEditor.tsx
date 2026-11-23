@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type {
-  AcceptanceCheck, AffectedParty, AuditStatus, CheckKind, Example, FindingFull, FindingHistory, Measurement,
+  AcceptanceCheck, AffectedParty, Audit, Brand, CheckKind, Example, FindingFull, FindingHistory,
 } from '../lib/types'
+import { CategoryPicker, EvidenceWindow, MeasurementsEditor, ScopeEditor } from './Fields'
+import { nextRefFor, refMatches } from '../lib/taxonomy'
+import { sourcesFrom } from '../lib/tools'
 import { BAND_LABEL, missingRequirements, riskFactor, score } from '../lib/score'
 import {
   createExample, deleteExample, deleteFinding, listHistory, updateExample, updateFinding, uploadEvidence, evidenceUrl,
@@ -9,6 +12,12 @@ import {
 import {
   CHECK_KINDS, CHECK_LABEL, CHECK_SHAPE, STAGE_HELP, STAGE_LABEL, STAGE_ORDER, checksFromExhibits, stage as stageOf,
 } from '../lib/lifecycle'
+
+/** Confidence is set once; the factor the score uses follows it. */
+const FACTOR_OF: Record<string, number> = { high: 1, medium: 0.8, low: 0.6 }
+
+const fmtDate = (d: string | null | undefined) =>
+  d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : ''
 
 /** Debounced autosave. Editing forty fields with a Save button is a bad trade. */
 function useAutosave(id: string, patch: Record<string, unknown>, enabled: boolean) {
@@ -67,12 +76,6 @@ const REACH: Scale = [
   [0.5, '0.5 · About half'],
   [0.25, '0.25 · A minority'],
   [0.1, '0.1 · A handful'],
-]
-const CONF_FACTOR: Scale = [
-  [1, '1.0 · Certain, several signals agree'],
-  [0.75, '0.75 · Likely, one solid signal'],
-  [0.5, '0.5 · Plausible, evidence is indirect'],
-  [0.25, '0.25 · Suspected, needs verifying'],
 ]
 const LEVERAGE: Scale = [
   [5, '5 · Unblocks a lot of later work'],
@@ -151,15 +154,20 @@ const DECISION_LABEL: Record<string, string> = {
 }
 
 export default function FindingEditor({
-  finding, auditStatus, onChange, onDeleted,
+  finding, audit, brand, all, onChange, onDeleted, onBrand,
 }: {
   finding: FindingFull
-  auditStatus: AuditStatus
+  audit: Audit
+  brand: Brand | null
+  all: FindingFull[]
   onChange: (f: FindingFull) => void
   onDeleted: () => void
+  onBrand?: (b: Brand) => void
 }) {
   const f = finding
+  const auditStatus = audit.status
   const stage = stageOf(f, auditStatus)
+  const frozen = auditStatus !== 'draft'
   const set = <K extends keyof FindingFull>(k: K, v: FindingFull[K]) => {
     const next = { ...f, [k]: v }
     next.score = score(next)
@@ -169,8 +177,29 @@ export default function FindingEditor({
     onChange(next)
   }
 
+  /** Several fields that move together, in one change. */
+  const setMany = (p: Partial<FindingFull>) => {
+    const next = { ...f, ...p }
+    next.score = score(next)
+    next.risk_factor = riskFactor(next)
+    onChange(next)
+  }
+
+  /** A category issues the reference. While the audit is a draft the
+   *  reference follows the category; once delivered it is a citation. */
+  const setCategory = (path: string) => {
+    if (frozen || refMatches(f.ref, path)) { setMany({ pillar: path }); return }
+    const taken = all.filter((o) => o.id !== f.id).map((o) => o.ref)
+    setMany({ pillar: path, ref: nextRefFor(path, taken) })
+  }
+
+  const foundWarn =
+    audit.started_on && f.raised < audit.started_on ? 'This is before the audit started.'
+      : audit.delivered_on && f.raised > audit.delivered_on ? 'This is after the audit was delivered.'
+        : null
+
   const savePatch = {
-    ref: f.ref, title: f.title, pillar: f.pillar, urls_affected: f.urls_affected,
+    ref: f.ref, title: f.title, pillar: f.pillar, raised: f.raised, scope: f.scope, urls_affected: f.urls_affected,
     templates: f.templates, markets: f.markets, measurements: f.measurements, source: f.source,
     collected_from: f.collected_from, collected_to: f.collected_to,
     confidence: f.confidence, confidence_reason: f.confidence_reason,
@@ -200,7 +229,9 @@ export default function FindingEditor({
         <h2 className="ttl" style={{ flex: 1 }}>{f.title || 'Untitled finding'}</h2>
         <span className="saving">{saveState === 'saving' ? 'saving' : saveState === 'error' ? 'save failed' : 'saved'}</span>
       </div>
-      <div className="idline">{f.ref} &nbsp;·&nbsp; {f.status.replace('_', ' ')}</div>
+      <div className="idline">
+        {f.ref} &nbsp;·&nbsp; Found on {fmtDate(f.raised)} &nbsp;·&nbsp; {f.status.replace('_', ' ')}
+      </div>
 
       <StageStrip stage={stage} />
 
@@ -214,7 +245,7 @@ export default function FindingEditor({
           {[
             ['Severity', f.severity_weight, 'how bad on its own terms, 1 to 5'],
             ['Reach', f.reach, 'share of relevant surface affected, 0 to 1'],
-            ['Confidence', f.confidence_factor, 'discount when the evidence is thinner, 0 to 1'],
+            ['Confidence', f.confidence_factor, 'follows the confidence level under Evidence'],
             ['Leverage', f.leverage, 'how much other work this unblocks, 1 to 5'],
             ['Effort', f.effort_days == null ? null : `${f.effort_days}d`, 'engineering days'],
             ['Risk', f.risk_factor, 'computed from blast radius, likelihood and reversibility'],
@@ -231,57 +262,61 @@ export default function FindingEditor({
         <div className="issue" key={i}><b>Incomplete</b>{m}</div>
       ))}
 
-      <G name="Identity" purpose="What this finding is. The reference never changes once issued, and the title is stated as a claim rather than a topic.">
-        <div className="two">
-          <F label="Reference"><input value={f.ref} onChange={(e) => set('ref', e.target.value)} /></F>
-          <F label="Pillar"><input value={f.pillar ?? ''} onChange={(e) => set('pillar', e.target.value)} /></F>
-        </div>
-        <F label="Title, stated as a claim" lead>
+      <G name="Identity" purpose="What this finding is. The category issues the reference, and the title is stated as a claim rather than a topic.">
+        <F label="Category" required>
+          <CategoryPicker value={f.pillar} onChange={setCategory} />
+          {frozen && !refMatches(f.ref, f.pillar) && (
+            <p className="hint" style={{ marginTop: 6 }}>The audit is {auditStatus.replace('_', ' ')}, so the reference {f.ref} stays as issued.</p>
+          )}
+        </F>
+        <F label="Title" lead>
           <input value={f.title} onChange={(e) => set('title', e.target.value)}
                  placeholder="The staging subdomain is fully indexed" />
+          <div className={`titlecount${f.title.length > 110 ? ' over' : ''}`}>
+            {f.title.length > 110 ? `${f.title.length} characters. Over 110 may not fit the PDF page.` : `${f.title.length} / 110`}
+          </div>
+        </F>
+        <F label="Found on">
+          <input type="date" value={f.raised} onChange={(e) => e.target.value && set('raised', e.target.value)} />
+          {foundWarn && <p className="fwarn">{foundWarn}</p>}
         </F>
       </G>
 
-      <G name="Scope" purpose="How much of the site it touches. A template-level issue is one fix; a page-level issue is many.">
-        <div className="three">
-          <F label="URLs affected">
-            <input type="number" value={f.urls_affected ?? ''} onChange={(e) => set('urls_affected', num(e.target.value))} />
-          </F>
-          <F label="Templates">
-            <input value={f.templates.join(', ')} onChange={(e) => set('templates', list(e.target.value))} />
-          </F>
-          <F label="Markets">
-            <input value={f.markets.join(', ')} onChange={(e) => set('markets', list(e.target.value))} />
-          </F>
-        </div>
+      <G name="Scope" purpose="Where it happens. Mix segments freely; upload the URLs when you have them, and the count follows.">
+        <ScopeEditor finding={f} brand={brand} onBrand={onBrand}
+          onChange={(p) => setMany(p)} />
       </G>
 
-      <G name="Evidence" purpose="How we know. Measurements are the numbers that support the claim; exhibits are what shows it.">
-        <Measurements value={f.measurements} onChange={(v) => set('measurements', v)} />
-        <div className="three">
-          <F label="Sources">
-            <input value={f.source.join(', ')} onChange={(e) => set('source', list(e.target.value))} />
+      <G name="Evidence" purpose="How we know. Measurements are the checks behind the claim; exhibits show it in place.">
+        <MeasurementsEditor value={f.measurements} orgId={f.org_id}
+          onChange={(rows) => {
+            // Sources follow the rows. A legacy finding whose rows carry no
+            // tool keeps the sources it was written with until one is picked.
+            const derived = sourcesFrom(rows)
+            setMany({ measurements: rows, source: derived.length ? derived : f.source })
+          }} />
+        <F label="Sources">
+          <div className="ro">{f.source.length ? f.source.join(' · ') : 'Pick a tool on a measurement and it appears here.'}</div>
+        </F>
+        <EvidenceWindow from={f.collected_from} to={f.collected_to}
+          onChange={(from, to) => setMany({ collected_from: from, collected_to: to })} />
+        <F label="Confidence">
+          <select value={f.confidence ?? ''} onChange={(e) => {
+            const v = (e.target.value || null) as FindingFull['confidence']
+            setMany({ confidence: v, confidence_factor: v ? FACTOR_OF[v] : null })
+          }}>
+            <option value="">Not set</option>
+            {(['high', 'medium', 'low'] as const).map((v) => (
+              <option key={v} value={v}>{CONFIDENCE_LABEL[v]}</option>
+            ))}
+          </select>
+          {f.confidence && <p className="hint" style={{ marginTop: 6 }}>Scores at {FACTOR_OF[f.confidence]}. Set here only.</p>}
+        </F>
+        {f.confidence && f.confidence !== 'high' && (
+          <F label="Confidence reason" required>
+            <textarea value={f.confidence_reason ?? ''} onChange={(e) => set('confidence_reason', e.target.value)} />
           </F>
-          <F label="Collected from">
-            <input type="date" value={f.collected_from ?? ''} onChange={(e) => set('collected_from', e.target.value || null)} />
-          </F>
-          <F label="Collected to">
-            <input type="date" value={f.collected_to ?? ''} onChange={(e) => set('collected_to', e.target.value || null)} />
-          </F>
-        </div>
-        <div className="two">
-          <F label="Confidence">
-            <select value={f.confidence ?? ''} onChange={(e) => set('confidence', (e.target.value || null) as never)}>
-              <option value="">Not set</option>
-              {(['high', 'medium', 'low'] as const).map((v) => (
-                <option key={v} value={v}>{CONFIDENCE_LABEL[v]}</option>
-              ))}
-            </select>
-          </F>
-          <F label="Reason, if below high">
-            <input value={f.confidence_reason ?? ''} onChange={(e) => set('confidence_reason', e.target.value)} />
-          </F>
-        </div>
+        )}
         <Exhibits finding={f} onChange={onChange} />
       </G>
 
@@ -354,7 +389,7 @@ export default function FindingEditor({
         <div className="four">
           <F label="Severity"><ScaleSelect value={f.severity_weight} scale={SEVERITY} onChange={(v) => set('severity_weight', v)} /></F>
           <F label="Reach"><ScaleSelect value={f.reach} scale={REACH} onChange={(v) => set('reach', v)} /></F>
-          <F label="Confidence factor"><ScaleSelect value={f.confidence_factor} scale={CONF_FACTOR} onChange={(v) => set('confidence_factor', v)} /></F>
+          <F label="Confidence factor"><input value={f.confidence_factor ?? ''} readOnly /></F>
           <F label="Leverage"><ScaleSelect value={f.leverage} scale={LEVERAGE} onChange={(v) => set('leverage', v)} /></F>
         </div>
       </G>
@@ -590,20 +625,15 @@ function History({ findingId, version }: { findingId: string; version: string })
  */
 const HINT: Record<string, string> = {
   // identity
-  'Reference': "This finding's permanent ID, like TECH-014. Never reuse or renumber it once it has gone to a client.",
-  'Pillar': 'Which area of the audit this came from, for example Indexation control or Answer eligibility.',
-  'Title, stated as a claim': 'Say what is wrong, not what the topic is. "The staging subdomain is fully indexed", not "Staging".',
+  'Category': 'Pick the area this belongs to. It sets the reference code.',
+  'Title': 'What is wrong, stated as a claim someone could disagree with.',
+  'Found on': "The day this was found. Defaults to the audit's start date.",
   // scope
-  'URLs affected': 'How many URLs actually have this problem.',
-  'Templates': 'Which page templates are affected. A template-level problem is one fix; a page-level one is many.',
-  'Markets': 'Which locales or country sites are affected. Leave blank if the site is single-market.',
   // evidence
-  'Measurements': 'Each check you ran, what it returned, and the date. These rows are the proof behind the claim.',
-  'Sources': 'The tools or datasets you used, by name. Screaming Frog, Search Console, server logs.',
-  'Collected from': 'First date your data covers.',
-  'Collected to': 'Last date your data covers. Without a window, nobody can re-verify this later.',
+  'Evidence window': "The span the evidence covers. Defaults to the audit's window.",
+  'Sources': 'Worked out from the tools on the measurements.',
   'Confidence': 'How strongly the evidence supports the claim.',
-  'Reason, if below high': 'Why it is not high. Fill this in whenever confidence is medium or low.',
+  'Confidence reason': 'Why confidence is not high.',
   'Exhibits': 'Screenshots, markup or responses that show the problem in place, so the reader does not have to go looking for it.',
   // impact
   'Impact type': 'What kind of harm this causes.',
@@ -627,7 +657,7 @@ const HINT: Record<string, string> = {
   // priority
   'Severity': 'How bad the problem is on its own, before considering how many pages it hits.',
   'Reach': 'What share of the relevant pages this affects. 1 means all of them.',
-  'Confidence factor': 'Lowers the score when your evidence is thinner. 1 means you are certain.',
+  'Confidence factor': 'Worked out from confidence: high 1, medium 0.8, low 0.6.',
   'Leverage': 'How much other work this unblocks. High leverage means fixing it makes later fixes possible.',
   // lifecycle
   'Status': 'Where this stands right now.',
@@ -694,30 +724,6 @@ function G({
       <p className="purpose">{purpose}</p>
       {children}
     </section>
-  )
-}
-
-function Measurements({ value, onChange }: { value: Measurement[]; onChange: (v: Measurement[]) => void }) {
-  return (
-    <div className="fld">
-      <label>Measurements</label>
-      {value.map((m, i) => (
-        <div key={i} className="three" style={{ marginBottom: 6 }}>
-          <input value={m.check} placeholder="what was checked"
-            onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, check: e.target.value } : x)))} />
-          <input value={m.result} placeholder="what came back"
-            onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, result: e.target.value } : x)))} />
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input type="date" value={m.taken}
-              onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, taken: e.target.value } : x)))} />
-            <button className="btn sm danger" onClick={() => onChange(value.filter((_, j) => j !== i))}>x</button>
-          </div>
-        </div>
-      ))}
-      <button className="btn sm" onClick={() => onChange([...value, { check: '', result: '', taken: new Date().toISOString().slice(0, 10) }])}>
-        Add measurement
-      </button>
-    </div>
   )
 }
 
