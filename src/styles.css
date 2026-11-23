@@ -11,7 +11,10 @@
   --r:2px;
 }
 *{box-sizing:border-box}
-html,body,#root{height:100%}
+html,body{height:100%}
+/* min-height, not height: a fixed-height root is the containing block for the
+   sticky header, so the header scrolled away once a page outgrew the screen. */
+#root{min-height:100%}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink-2);font-family:var(--body);font-size:14.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
 a{color:var(--teal-d)}
@@ -1097,7 +1100,21 @@ input, select, textarea { font-size: 16px }
 
 /* top bar and the audit's breadcrumb bar */
 .top{background:var(--chrome);border-bottom:1px solid var(--chrome-line);color:var(--chrome-text)}
-.top.sub{background:var(--chrome-2);height:46px}
+/* Not "sub": that name already belongs to the page subtitle, which caps
+   width at 70ch and adds a bottom margin. The bar sits under the main bar
+   and the split below it gets the height of both. */
+.top.crumbbar{background:var(--chrome-2);height:46px;top:54px;z-index:19}
+.crumbbar+.split{height:calc(100vh - 100px)}
+@media (max-width:960px){.crumbbar+.split{height:auto}}
+@media (max-width:760px){.top.crumbbar{top:52px}}
+/* Logic mode's score bar sticks inside the pane, which is its own scroller
+   on a desktop, so it belongs at the pane's top edge (the pane has 26px
+   of top padding, hence -26px). Below 960px the page
+   scrolls instead and the bar sits under both header bars. */
+.lbar{top:-26px;padding:9px 14px;border:1px solid var(--line-2);border-top:0}
+.logic{max-width:860px}
+@media (max-width:960px){.lbar{top:100px}.pane{overflow:visible}}
+@media (max-width:760px){.lbar{top:98px}}
 .brandmark{color:#fff}
 .brandmark span{color:var(--chrome-muted)}
 .topnav-l{color:var(--chrome-soft)}
@@ -1123,7 +1140,12 @@ input, select, textarea { font-size: 16px }
 .listbar input::placeholder{color:var(--chrome-muted)}
 .listbar .btn.pri{background:#fff;border-color:#fff;color:var(--ink)}
 .listbar .btn.pri:hover{background:var(--chrome-text);border-color:var(--chrome-text);color:var(--ink)}
-.frow{border-bottom-color:var(--chrome-line)}
+/* Refs are full words now (Crawling/Robots/3), too long for a 34px column,
+   so the ref gets its own line above the title and the band pill sits right. */
+.frow{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:start;border-bottom-color:var(--chrome-line)}
+.frow .ref{grid-column:1;grid-row:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .nm{grid-column:1;grid-row:2}
+.frow .pill{grid-column:2;grid-row:1/span 2}
 .frow:hover{background:#25275A}
 .frow[aria-selected=true]{background:var(--chrome-hi);box-shadow:inset 3px 0 0 var(--chrome-accent)}
 .frow .ref{color:var(--chrome-muted)}
@@ -1147,7 +1169,7 @@ input, select, textarea { font-size: 16px }
 /* field groups: number, name and purpose in a label column, fields in a
    card beside it, a heavy rule between groups so each reads as its own */
 .pane,.logic{counter-reset:grp}
-.grp,.lgrp{display:flex;flex-wrap:wrap;gap:18px 28px;max-width:1000px;margin:0;padding:26px 0;
+.grp,.lgrp{display:flex;flex-wrap:wrap;gap:18px 28px;max-width:860px;margin:0;padding:26px 0;
   background:transparent;border:0;border-top:2px solid var(--ink);border-radius:0;counter-increment:grp}
 .grp-l,.lgrp-l{flex:1 1 190px;max-width:220px}
 .grp-l::before,.lgrp-l::before{content:counter(grp,decimal-leading-zero);display:block;margin-bottom:8px;
@@ -1158,3 +1180,6 @@ input, select, textarea { font-size: 16px }
 .grp-b,.lgrp .lgrid{flex:999 1 420px;min-width:0;background:var(--surface);border:1px solid var(--line-2)}
 .grp-b{padding:20px 22px 6px}
 .lgrp .lgrid{padding:18px}
+/* The hidden checkbox inside a chip is absolutely placed; without a
+   positioned chip it escaped to the page and stretched it by 1,400px. */
+.lchip{position:relative}
