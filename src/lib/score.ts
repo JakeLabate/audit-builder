@@ -1,4 +1,5 @@
 import type { Finding, PriorityBand } from './types'
+import { isCategoryPath } from './taxonomy'
 
 /**
  * The priority formula. This mirrors the `finding_scores` view in Postgres
@@ -98,8 +99,11 @@ export const BAND_LABEL: Record<PriorityBand, string> = {
 export function missingRequirements(f: Finding): string[] {
   const out: string[] = []
   if (!f.title.trim()) out.push('A finding needs a title stated as a claim.')
+  if (!isCategoryPath(f.pillar)) out.push('Pick a category so the reference can be issued.')
+  if (f.confidence && f.confidence !== 'high' && !f.confidence_reason?.trim())
+    out.push('Confidence is below high, so the confidence reason has to say why.')
   if (f.quantity_value != null && !f.impact_basis?.trim())
-    out.push('You asserted a quantity. impact_basis has to say where it came from.')
+    out.push('You asserted a quantity. The impact basis has to say where it came from.')
   if (f.severity_weight == null) out.push('Severity weight is unset, so no score can be computed.')
   if (f.effort_days == null) out.push('Effort is unset, so no score can be computed.')
   if (!f.verification_method?.trim())

@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import Deliverables from '../components/Deliverables'
 import { Link, useParams } from 'react-router-dom'
 import {
-  evidenceUrl, createFinding, getAudit, listBrands, listFindings, nextRef, updateAudit, withBands,
+  evidenceUrl, createFinding, getAudit, listBrands, listFindings, nextRef, updateAudit, updateFindings, withBands,
 } from '../lib/api'
+import { CascadeModal, type CascadeRow } from '../components/Fields'
+import { registryOf } from '../lib/derive'
 import type { Audit, Brand, FindingFull } from '../lib/types'
 import FindingEditor from '../components/FindingEditor'
 import LogicEditor from '../components/LogicEditor'
@@ -77,8 +79,14 @@ export default function AuditView() {
 
   async function add() {
     if (!audit) return
-    const ref = await nextRef(audit.id, 'TECH')
-    const f = await createFinding(audit.org_id, audit.id, ref, '', findings.length)
+    // No category yet, so the reference is Uncategorized/n until one is
+    // picked. The dates come from the audit, so nobody types them.
+    const ref = await nextRef(audit.id, null)
+    const f = await createFinding(audit.org_id, audit.id, ref, '', findings.length, {
+      raised: audit.started_on ?? undefined,
+      collected_from: audit.evidence_from,
+      collected_to: audit.evidence_to,
+    })
     setFindings((p) => withBands([...p, f]))
     setSel(f.id)
   }
@@ -130,7 +138,7 @@ export default function AuditView() {
           )}
           {shown.length === 0 ? (
             <div style={{ padding: 24, color: 'var(--muted)', fontSize: 13.5 }}>
-              No findings yet. Every finding is the same forty fields, so start one and fill what you know.
+              No findings yet. Every finding is the same 53 fields, so start one and fill what you know.
             </div>
           ) : (
             shown.map((f) => (
@@ -157,12 +165,16 @@ export default function AuditView() {
                 audit={audit}
                 brand={brand}
                 all={findings}
+                onBrand={setBrand}
                 onSaved={(f) => setFindings((p) => withBands(p.map((x) => (x.id === f.id ? f : x))))}
               />
             ) : (
               <FindingEditor
                 finding={current}
-                auditStatus={audit.status}
+                audit={audit}
+                brand={brand}
+                all={findings}
+                onBrand={setBrand}
                 onChange={(f) => setFindings((p) => withBands(p.map((x) => (x.id === f.id ? f : x))))}
                 onDeleted={() => {
                   setFindings((p) => withBands(p.filter((x) => x.id !== current.id)))
@@ -205,20 +217,75 @@ export default function AuditView() {
           <button onClick={() => setToast(null)} aria-label="Dismiss">&times;</button>
         </div>
       )}
-      <AuditMeta audit={audit} onChange={setAudit} />
+      <AuditMeta audit={audit} findings={findings} onChange={setAudit}
+        cycleDays={registryOf(brand).crawl_cycle_days}
+        onFindings={(ids, patch) => setFindings((p) => withBands(p.map((x) => (ids.includes(x.id) ? { ...x, ...patch } : x))))} />
     </>
   )
 }
 
 /** Audit-level fields the document needs but the finding list does not show. */
-function AuditMeta({ audit, onChange }: { audit: Audit; onChange: (a: Audit) => void }) {
+function AuditMeta({
+  audit, findings, onChange, onFindings, cycleDays,
+}: {
+  audit: Audit
+  findings: FindingFull[]
+  cycleDays: number
+  onChange: (a: Audit) => void
+  onFindings: (ids: string[], patch: Partial<FindingFull>) => void
+}) {
   const [open, setOpen] = useState(false)
+  const [cascade, setCascade] = useState<{
+    what: string; next: string; rows: CascadeRow[]; patch: Partial<FindingFull>
+  } | null>(null)
+  // What the audit held when the field was focused, so a cascade compares
+  // findings against the old audit value rather than the half-typed one.
+  const [before, setBefore] = useState<Audit>(audit)
+
+  const fmt = (d: string | null) => d ?? 'not set'
+
+  function commitStart() {
+    if (audit.started_on === before.started_on || !audit.started_on) return
+    updateAudit(audit.id, { started_on: audit.started_on })
+    const next = audit.started_on
+    const rows = findings.filter((f) => f.raised !== next).map((f) => ({
+      id: f.id, ref: f.ref, title: f.title, current: f.raised, preTick: f.raised === before.started_on,
+    }))
+    // In logic mode Verify by is derived from Found on, so it moves with it.
+    const patch: Partial<FindingFull> = { raised: next }
+    if (audit.mode === 'logic') {
+      const d = new Date(next + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + cycleDays)
+      patch.verify_by = d.toISOString().slice(0, 10)
+    }
+    if (rows.length) setCascade({ what: 'Found on', next, rows, patch })
+  }
+
+  function commitWindow() {
+    if (audit.evidence_from === before.evidence_from && audit.evidence_to === before.evidence_to) return
+    updateAudit(audit.id, { evidence_from: audit.evidence_from, evidence_to: audit.evidence_to })
+    const same = (f: FindingFull, a: Audit) => f.collected_from === a.evidence_from && f.collected_to === a.evidence_to
+    const rows = findings.filter((f) => !same(f, audit)).map((f) => ({
+      id: f.id, ref: f.ref, title: f.title,
+      current: `${fmt(f.collected_from)} to ${fmt(f.collected_to)}`,
+      preTick: same(f, before),
+    }))
+    if (rows.length) {
+      setCascade({
+        what: 'the evidence window',
+        next: `${fmt(audit.evidence_from)} to ${fmt(audit.evidence_to)}`,
+        rows,
+        patch: { collected_from: audit.evidence_from, collected_to: audit.evidence_to },
+      })
+    }
+  }
+
   return (
     <div style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 30 }}>
       {open && (
         <div style={{
           background: 'var(--surface)', border: '1px solid var(--line)', padding: 16,
           width: 330, marginBottom: 8, boxShadow: '0 14px 40px rgba(25,26,62,.18)',
+          maxHeight: '70vh', overflow: 'auto',
         }}>
           <div className="fld">
             <label>Audit title</label>
@@ -243,6 +310,28 @@ function AuditMeta({ audit, onChange }: { audit: Audit; onChange: (a: Audit) => 
             </div>
           </div>
           <div className="fld">
+            <label>Started on</label>
+            <input type="date" value={audit.started_on ?? ''}
+              onFocus={() => setBefore(audit)}
+              onChange={(e) => onChange({ ...audit, started_on: e.target.value || null })}
+              onBlur={commitStart} />
+            <div className="hint">Every new finding's Found on date starts here.</div>
+          </div>
+          <div className="fld">
+            <label>Evidence window</label>
+            <div className="two">
+              <input type="date" aria-label="Evidence from" value={audit.evidence_from ?? ''}
+                onFocus={() => setBefore(audit)}
+                onChange={(e) => onChange({ ...audit, evidence_from: e.target.value || null })}
+                onBlur={commitWindow} />
+              <input type="date" aria-label="Evidence to" value={audit.evidence_to ?? ''}
+                onFocus={() => setBefore(audit)}
+                onChange={(e) => onChange({ ...audit, evidence_to: e.target.value || null })}
+                onBlur={commitWindow} />
+            </div>
+            <div className="hint">The span the evidence covers. Every new finding starts with it.</div>
+          </div>
+          <div className="fld">
             <label>Gaps</label>
             <textarea value={audit.gaps ?? ''}
               onChange={(e) => onChange({ ...audit, gaps: e.target.value })}
@@ -254,6 +343,14 @@ function AuditMeta({ audit, onChange }: { audit: Audit; onChange: (a: Audit) => 
       <button className="btn" onClick={() => setOpen((v) => !v)}>
         {open ? 'Close audit settings' : 'Audit settings'}
       </button>
+      {cascade && (
+        <CascadeModal what={cascade.what} next={cascade.next} rows={cascade.rows}
+          onClose={() => setCascade(null)}
+          onApply={async (ids) => {
+            await updateFindings(ids, cascade.patch)
+            onFindings(ids, cascade.patch)
+          }} />
+      )}
     </div>
   )
 }

@@ -28,7 +28,7 @@ export const CATALOGUE: {
   },
   {
     key: 'summary', name: 'What we found', pages: 1,
-    what: 'The shape of the audit before any detail: findings by band, by pillar, total effort, and the five highest scoring.',
+    what: 'The shape of the audit before any detail: findings by band, by category, total effort, and the five highest scoring.',
   },
   {
     key: 'contents', name: 'Contents', pages: 1,

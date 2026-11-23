@@ -4,6 +4,7 @@
  * is no second implementation to keep in step.
  */
 import { ApiError, insert, patch, remove, rpc, scoped, type Env } from './db'
+import { isCategoryPath, nextRefFor } from '../../src/lib/taxonomy'
 
 export interface Ctx { org: string; scopes: string[]; keyId: string }
 
@@ -132,7 +133,8 @@ export const findings = {
     const bits = [`select=${FINDING_SELECT}`, 'order=position', `limit=${cap(env, q.get('limit'))}`]
     if (q.get('audit_id')) bits.push(`audit_id=eq.${q.get('audit_id')}`)
     if (q.get('status')) bits.push(`status=eq.${q.get('status')}`)
-    if (q.get('pillar')) bits.push(`pillar=eq.${q.get('pillar')}`)
+    const cat = q.get('category') ?? q.get('pillar')
+    if (cat) bits.push(isCategoryPath(cat) ? `pillar=eq.${cat}` : `pillar=like.${cat}/*`)
     if (q.get('impact_type')) bits.push(`impact_type=eq.${q.get('impact_type')}`)
     if (q.get('owner')) bits.push(`owner=eq.${q.get('owner')}`)
     if (q.get('wave')) bits.push(`wave=eq.${q.get('wave')}`)
@@ -149,11 +151,27 @@ export const findings = {
     needWrite(ctx)
     if (!body.audit_id) throw new ApiError(400, 'A finding needs an audit_id.')
     if (!body.title) throw new ApiError(400, 'A finding needs a title stated as a claim.')
+    normalize(body)
+    if (body.pillar != null && !isCategoryPath(String(body.pillar))) {
+      throw new ApiError(400, 'category has to be Category/Subcategory from the universal taxonomy, for example Indexation/Canonicals.')
+    }
+    // The dates come from the audit unless the caller says otherwise.
+    const a = (await scoped(env, ctx.org, 'audits',
+      `id=eq.${body.audit_id}&select=started_on,evidence_from,evidence_to`, true)) as Record<string, unknown> | null
+    if (a) {
+      if (!body.raised && a.started_on) body.raised = a.started_on
+      if (body.collected_from === undefined && a.evidence_from) body.collected_from = a.evidence_from
+      if (body.collected_to === undefined && a.evidence_to) body.collected_to = a.evidence_to
+    }
     if (!body.ref) body.ref = await nextRef(env, ctx, String(body.audit_id), body.pillar)
     return insert(env, ctx.org, 'findings', body)
   },
   async update(env: Env, ctx: Ctx, id: string, body: Record<string, unknown>) {
     needWrite(ctx)
+    normalize(body)
+    if (body.pillar != null && !isCategoryPath(String(body.pillar))) {
+      throw new ApiError(400, 'category has to be Category/Subcategory from the universal taxonomy, for example Indexation/Canonicals.')
+    }
     return patch(env, ctx.org, 'findings', id, body)
   },
   async remove(env: Env, ctx: Ctx, id: string) {
@@ -163,19 +181,34 @@ export const findings = {
   },
 }
 
-/** Mirrors the app: pillar code plus the next free number in this audit. */
-async function nextRef(env: Env, ctx: Ctx, auditId: string, pillar: unknown): Promise<string> {
-  const code = String(pillar ?? 'GEN')
-    .replace(/[^A-Za-z]/g, '')
-    .slice(0, 4)
-    .toUpperCase() || 'GEN'
+/**
+ * The names the app now uses, mapped onto the columns that have not been
+ * renamed, plus the fields that follow other fields. `pillar` and `raised`
+ * are still accepted for one version.
+ */
+function normalize(body: Record<string, unknown>) {
+  if (body.category !== undefined) { body.pillar = body.category; delete body.category }
+  if (body.found_on !== undefined) { body.raised = body.found_on; delete body.found_on }
+  if (Array.isArray(body.measurements)) {
+    const tools = (body.measurements as { tool?: string }[]).map((m) => m.tool).filter(Boolean) as string[]
+    const groups = [...new Set(tools.map((t) => t.split(' › ')[0]))]
+    if (groups.length) body.source = groups
+  }
+  if (typeof body.confidence === 'string') {
+    body.confidence_factor = ({ high: 1, medium: 0.8, low: 0.6 } as Record<string, number>)[body.confidence] ?? null
+  }
+  if (body.scope && typeof body.scope === 'object') {
+    const segs = ((body.scope as { segments?: { type?: string; name?: string }[] }).segments ?? [])
+    body.templates = [...new Set(segs.filter((s) => s.type === 'template' && s.name).map((s) => s.name as string))]
+  }
+}
+
+/** Mirrors the app: Category/Subcategory/n, the first free number in this audit. */
+async function nextRef(env: Env, ctx: Ctx, auditId: string, category: unknown): Promise<string> {
   const rows = (await scoped(
     env, ctx.org, 'findings', `audit_id=eq.${auditId}&select=ref`,
   )) as Record<string, unknown>[]
-  const used = new Set(rows.map((r) => String(r.ref)))
-  let n = 1
-  while (used.has(`${code}-${String(n).padStart(3, '0')}`)) n++
-  return `${code}-${String(n).padStart(3, '0')}`
+  return nextRefFor(category == null ? null : String(category), rows.map((r) => String(r.ref)))
 }
 
 /* ---------------------------------------------------------------- examples */

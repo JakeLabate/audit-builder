@@ -1,4 +1,5 @@
 import type { Audit, FindingFull } from './types'
+import { describeScope, scopeOf } from './scope'
 import { BAND_LABEL } from './score'
 
 /**
@@ -43,8 +44,8 @@ export const SHEET_COLUMNS: SheetCol[] = [
     value: (f) => f.wave ?? '' },
   { key: 'urls_affected', header: 'URLs affected', note: 'URLs with the problem.', width: 120,
     value: (f) => f.urls_affected ?? '' },
-  { key: 'templates', header: 'Templates', note: 'Which page templates are hit. A template problem is one fix.', width: 170, wrap: true,
-    value: (f) => f.templates.join(', ') },
+  { key: 'templates', header: 'Scope', note: 'Where it happens: templates, components, pages or sitewide.', width: 200, wrap: true,
+    value: (f) => describeScope(scopeOf(f.scope)) || f.templates.join(', ') },
   { key: 'impact_basis', header: 'What it costs', note: 'The exposure, and where that number came from.', width: 380, wrap: true,
     value: (f) => f.impact_basis ?? '' },
   { key: 'action', header: 'The fix', note: 'What to do, written as an instruction to the owner.', width: 380, wrap: true,
@@ -55,7 +56,7 @@ export const SHEET_COLUMNS: SheetCol[] = [
     value: (f) => f.verify_by ?? '' },
 
   /* Off by default. Available when the register needs to carry more. */
-  { key: 'pillar', header: 'Pillar', note: 'Which area of the audit this came from.', width: 150,
+  { key: 'pillar', header: 'Category', note: 'The area this belongs to. It sets the reference.', width: 170,
     value: (f) => f.pillar ?? '' },
   { key: 'markets', header: 'Markets', note: 'Which locales or country sites are affected.', width: 120,
     value: (f) => f.markets.join(', ') },
@@ -69,9 +70,9 @@ export const SHEET_COLUMNS: SheetCol[] = [
     value: (f) => title(f.time_horizon) },
   { key: 'confidence', header: 'Confidence', note: 'How strongly the evidence supports the claim, and why if not high.', width: 200, wrap: true,
     value: (f) => (f.confidence ? title(f.confidence) + (f.confidence_reason ? `. ${f.confidence_reason}` : '') : '') },
-  { key: 'collected', header: 'Data window', note: 'The span the evidence covers. Without it nobody can re-verify.', width: 150,
+  { key: 'collected', header: 'Evidence window', note: 'The span the evidence covers. Without it nobody can re-verify.', width: 150,
     value: (f) => (f.collected_from && f.collected_to ? `${f.collected_from} to ${f.collected_to}` : '') },
-  { key: 'sources', header: 'Sources', note: 'The tools and datasets the finding was built from.', width: 240, wrap: true,
+  { key: 'sources', header: 'Sources', note: 'The tools the measurements came from.', width: 240, wrap: true,
     value: (f) => f.source.join(', ') },
   { key: 'steps', header: 'Steps', note: 'The fix broken down so an engineer needs no follow-up question.', width: 420, wrap: true,
     value: (f) => f.steps.map((s, i) => `${i + 1}. ${s}`).join('\n') },

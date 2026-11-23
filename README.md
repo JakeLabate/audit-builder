@@ -2,8 +2,10 @@
 
 Structured SEO audit findings, from record to deliverable.
 
-Every finding is the same 40 fields, grouped as identity, scope, evidence,
-impact, remedy, risk, priority and lifecycle. Because the record is fixed,
+Every finding is the same 53 fields, grouped as identity, scope, evidence,
+impact, remedy, risk, priority and lifecycle. Categories come from one
+universal two-level taxonomy (`src/lib/taxonomy.ts`), and each finding's
+reference is issued from it: `Indexation/Canonicals/2`. Because the record is fixed,
 one finding can be sorted by score, filtered to an owner, grouped by template,
 counted by band, and exported to four formats without being retyped.
 
@@ -13,7 +15,7 @@ The document is a view of the register, not the other way round.
 
 - **Supabase** for Postgres, OAuth, row level security and evidence storage
 - **React + Vite + TypeScript**, no server of its own
-- **Cloudflare Pages** at `auditbuilder.jakelabate.com`
+- **Cloudflare Workers** (static assets) at `auditbuilder.jakelabate.com`
 
 ## Exports
 

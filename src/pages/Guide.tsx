@@ -47,10 +47,11 @@ export default function Guide() {
           you could not see. A <b>finding</b> is one claim.
         </p>
         <p className="doc-p">
-          The registry is the part people skip and then miss. Putting pillars, templates, owners and
-          metrics on the brand rather than typing them per finding is what makes the register
-          sortable and the roadmap addable. Fill it in once and every audit for that client inherits
-          a consistent spine.
+          The registry is the part people skip and then miss. Putting templates, components, owners
+          and metrics on the brand rather than typing them per finding is what makes the register
+          sortable and the roadmap addable. Categories are different: they are one universal,
+          two-level list for every workspace, so a reference like Indexation/Canonicals/2 means the
+          same thing in every audit.
         </p>
       </section>
 
@@ -114,7 +115,7 @@ export default function Guide() {
         </p>
         <p className="doc-p">
           <b>Logic</b> makes the database do the work it can do without you. References are
-          generated from the pillar, windows and reach are derived, status transitions are
+          issued from the category, sources and the confidence factor are derived, status transitions are
           constrained, and a write that contradicts what the database derived is rejected with a
           reason. Slower to start, much harder to produce something incoherent.
         </p>

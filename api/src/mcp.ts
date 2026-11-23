@@ -28,16 +28,18 @@ const params = (props: Json, required: string[] = []) => ({
 /** A finding body, described once. Every writable field, nothing else. */
 const FINDING_BODY: Json = {
   title: str('The finding stated as a claim, not a topic.'),
-  pillar: str('Which area of the audit. Must be in the brand registry.'),
-  urls_affected: { type: 'integer' },
-  templates: { type: 'array', items: { type: 'string' } },
+  category: str('Category/Subcategory from the universal taxonomy, for example Indexation/Canonicals or AI/Extractability. It issues the reference.'),
+  found_on: str('YYYY-MM-DD. Defaults to the audit start date.'),
+  scope: {
+    type: 'object',
+    description: 'Where it happens: {segments: [{type: template|component|pages|sitewide, name?, urls?}]}. urls_affected is worked out from it.',
+  },
   markets: { type: 'array', items: { type: 'string' } },
   measurements: {
     type: 'array',
-    description: 'Each check you ran: {check, result, taken}.',
-    items: params({ check: str(''), result: str(''), taken: str('YYYY-MM-DD') }),
+    description: 'Each check you ran: {check, tool, result}. tool is "Tool › Report", for example "Screaming Frog › Crawl". Sources are worked out from the tools.',
+    items: params({ check: str(''), tool: str('Tool › Report'), result: str('') }),
   },
-  source: { type: 'array', items: { type: 'string' }, description: 'Must be a subset of the audit sources.' },
   confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
   confidence_reason: str('Required when confidence is not high.'),
   impact_type: {
@@ -150,7 +152,7 @@ export const TOOLS: Tool[] = [
     description: 'Findings in an audit, with their exhibits and computed score.',
     inputSchema: params({
       audit_id: str(''),
-      status: str(''), pillar: str(''), owner: str(''),
+      status: str(''), category: str('Category, or Category/Subcategory.'), owner: str(''),
       impact_type: str(''), wave: { type: 'integer' },
       q: str('Substring match on the title.'),
       limit: { type: 'integer' },
@@ -166,7 +168,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'create_finding',
     description:
-      'Add a finding. The reference is generated from the pillar unless you pass one. ' +
+      'Add a finding. The reference is issued from the category (Category/Subcategory/n) unless you pass one. ' +
       'In a logic audit the database refuses anything internally inconsistent and says why.',
     inputSchema: params({ audit_id: str(''), ...FINDING_BODY }, ['audit_id', 'title']),
     run: (env, ctx, a) => findings.create(env, ctx, a),
