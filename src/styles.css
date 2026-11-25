@@ -1587,32 +1587,58 @@ input, select, textarea { font-size: 16px }
 /* ======================================================================
    Deliverables.
 
-   A rail down the left edge of the audit, the full height of the workspace.
-   Closed it is a slim tab with a count. Open, its panel takes the list
-   column, so nothing else on the page moves or gets narrower. The rail
-   needs width a phone does not have, so below 960px the same panel is a
-   third tab in the list's own tab bar.
+   A rail down the right edge of the audit, the full height of the
+   workspace. Closed it is a slim tab with a count. Open, its panel slides
+   out beside it, over the editor's right margin, so the list and the editor
+   keep their place and their width. The rail needs width a phone does not
+   have, so below 960px the same panel is a third tab in the list's own tab
+   bar.
    ====================================================================== */
-.split.has-rail{grid-template-columns:44px minmax(0,330px) minmax(0,1fr)}
-.rail{display:flex;flex-direction:column;min-height:0;background:var(--chrome);border-right:1px solid var(--chrome-line)}
+.split.has-rail{position:relative;grid-template-columns:minmax(0,330px) minmax(0,1fr) 44px}
+.rail{display:flex;flex-direction:column;min-height:0;background:var(--chrome);border-left:1px solid var(--chrome-line)}
 .rail-tab{flex:1;width:100%;display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 0;
   background:none;border:0;cursor:pointer;color:var(--chrome-soft)}
 .rail-tab:hover{background:var(--chrome-2);color:#fff}
-.rail-tab.on{background:var(--chrome-3);color:#fff;box-shadow:inset 3px 0 0 var(--chrome-accent)}
+.rail-tab.on{background:var(--chrome-3);color:#fff;box-shadow:inset -3px 0 0 var(--chrome-accent)}
 .rail-tab:focus-visible{outline:2px solid var(--chrome-accent);outline-offset:-3px}
-.rail-caret{width:8px;height:8px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(-45deg);margin-left:-4px}
-.rail-tab.on .rail-caret{transform:rotate(135deg);margin-left:4px}
+/* Points the way the panel will move: out to the left, back to the right. */
+.rail-caret{width:8px;height:8px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(135deg);margin-left:4px}
+.rail-tab.on .rail-caret{transform:rotate(-45deg);margin-left:-4px}
 .rail-n{min-width:24px;height:24px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;
   border-radius:999px;background:var(--chrome-hi);border:1px solid var(--chrome-edge);
   font-family:var(--mono);font-weight:500;font-size:11.5px;color:#fff}
 .rail-tab.on .rail-n{background:var(--chrome-accent);border-color:transparent;color:var(--chrome)}
-.rail-l{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;
+.rail-l{writing-mode:vertical-rl;white-space:nowrap;
   font-family:var(--mono);font-weight:500;font-size:11.5px;letter-spacing:.18em;text-transform:uppercase}
 
-/* The panel owns the column while it is open: the findings tabs and filter
-   go, and its own header takes their place. */
-.split.dlv-open .listbar{display:none}
+.dlv-side{position:absolute;top:0;bottom:0;right:44px;width:330px;z-index:6;overflow-y:auto;
+  background:var(--chrome-3);border-left:1px solid var(--chrome-line);box-shadow:-14px 0 34px rgba(15,16,40,.24)}
+/* The settings button floats in the corner the rail now runs down, and
+   under the panel when that is open. It steps aside for both. */
+.split.has-rail~.am{right:62px}
+.split.has-rail.dlv-open~.am{right:392px}
 .vtab.narrow{display:none}
+/* With room to spare the panel takes a column of its own and the editor
+   reflows beside it, so nothing is covered. Below that it slides over the
+   editor's right edge instead of squeezing the form. */
+@media (min-width:1100px){
+  .split.has-rail.dlv-open{grid-template-columns:minmax(0,330px) minmax(0,1fr) 330px 44px}
+  .split.has-rail.dlv-open>.rail{grid-column:4;grid-row:1}
+  .dlv-side{position:static;grid-column:3;grid-row:1;width:auto;box-shadow:none;min-height:0}
+}
+/* The editor is narrower while the panel is open, though the window is not,
+   so the rules that fold its widest parts on a small screen never fire.
+   These are the same folds, keyed to the panel instead. */
+@media (min-width:1100px) and (max-width:1399px){
+  .split.dlv-open .scorebox{flex-direction:column}
+  .split.dlv-open .scorebox .big{border-right:0;border-bottom:1px solid rgba(255,255,255,.14)}
+  .split.dlv-open .scorebox .terms{grid-template-columns:repeat(3,1fr)}
+  .split.dlv-open .scorebox .terms>div:nth-child(4){border-left:0}
+}
+@media (min-width:1100px) and (max-width:1249px){
+  .split.dlv-open .ck{grid-template-columns:minmax(0,1fr)}
+  .split.dlv-open .ck-side{align-items:flex-start}
+}
 
 .dlv{padding-bottom:28px}
 .dlv-hd{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;height:57px;padding:0 12px 0 14px;
@@ -1654,8 +1680,8 @@ input, select, textarea { font-size: 16px }
 @media (max-width:960px){
   .split.has-rail{grid-template-columns:1fr}
   .rail{display:none}
+  .split.has-rail~.am,.split.has-rail.dlv-open~.am{right:18px}
   .vtab.narrow{display:block}
-  .split.dlv-open .listbar{display:flex}
   /* The tab already says where you are and how to leave. */
   .dlv-hd{display:none}
   /* Three tabs: each as wide as its own words, not a third of the bar. */

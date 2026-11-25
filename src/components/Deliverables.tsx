@@ -8,11 +8,11 @@ import { LINK_DAYS, deleteExport, documentLink, type ExportRow } from '../lib/ex
  * register URL survived twenty seconds and the document survived not at all,
  * so there was no answer to "what did we actually send them".
  *
- * It lives in a rail down the left edge of the audit, the full height of the
- * workspace. Closed, the rail is a slim tab with a count. Open, the panel
- * takes the list column. It used to sit under the audit, below a workspace
- * that is exactly one screen tall, so it was always a scroll away and easy to
- * never find.
+ * It lives in a rail down the right edge of the audit, the full height of
+ * the workspace. Closed, the rail is a slim tab with a count. Open, the panel
+ * slides out beside it, over the empty margin of the editor. It used to sit
+ * under the audit, below a workspace that is exactly one screen tall, so it
+ * was always a scroll away and easy to never find.
  */
 
 /** The slim tab. The whole strip is the target, so it is easy to hit. */
