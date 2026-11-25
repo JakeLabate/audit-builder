@@ -156,6 +156,18 @@ function facts(f: FindingFull): string {
   return cells.length ? `<div class="facts" data-keep>${cells.join('')}</div>` : ''
 }
 
+/**
+ * Compact mode holds a finding to one page. When it carries more than fits,
+ * something has to come off, and the layout pass removes the least important
+ * thing first. Each item is marked here with how soon it can go: a higher
+ * number goes sooner. Extra exhibits go first, then measurements past the
+ * third, then steps past the fourth, and only then the things a reader would
+ * miss. The first measurement and the first step are never marked, so they
+ * always print. Whatever comes off is counted on the page.
+ */
+const droppable = (html: string, order: number | null, kind: string) =>
+  order == null ? html : html.replace(/^(\s*<\w+)/, `$1 data-drop="${order}" data-kind="${kind}"`)
+
 /** Long extracts are the one thing that cannot be divided between pages. */
 function clampExtract(text: string, max: number): string {
   const lines = String(text ?? '').split('\n')
@@ -195,8 +207,10 @@ function figure(e: Example, n: number, images: Record<string, string>): string {
 
 function findingPage(
   f: FindingFull, running: string, folio: number, images: Record<string, string>,
-  refOf: Map<string, string>, sheetUrl?: string | null,
+  refOf: Map<string, string>, sheetUrl?: string | null, compact = false,
 ): string {
+  const drop = (html: string, order: number | null, kind: string) =>
+    compact ? droppable(html, order, kind) : html
   const title = has(f.title) ? f.title : 'Untitled finding'
 
   const head = `<div class="hd" data-keep>
@@ -211,10 +225,11 @@ function findingPage(
   // The tool column exists only if some row names a tool or a date.
   const anyTool = checks.some((m) => has(m.tool) || has(m.taken))
   const rows = checks
-    .map((m) => {
+    .map((m, i) => {
       const tool = [m.tool, m.taken ? day(m.taken) : ''].filter(has).join(' · ')
-      return `<tr><td class="ck">${esc(m.check)}</td><td class="rs">${esc(m.result)}</td>
-        ${anyTool ? `<td class="tool">${esc(tool)}</td>` : ''}</tr>`
+      return drop(`<tr><td class="ck">${esc(m.check)}</td><td class="rs">${esc(m.result)}</td>
+        ${anyTool ? `<td class="tool">${esc(tool)}</td>` : ''}</tr>`,
+      i === 0 ? null : i < 3 ? 80 + i : 200 + i, 'measurement')
     })
   // When it was gathered rides on the label, where it costs no line.
   const window = has(f.collected_from) && has(f.collected_to)
@@ -227,18 +242,19 @@ function findingPage(
 
   const behind = [
     has(f.confidence_reason)
-      ? `<p class="note"><b>${f.confidence ? `Confidence is ${esc(f.confidence)}.` : 'On confidence.'}</b> ${rich(f.confidence_reason)}</p>` : '',
+      ? drop(`<p class="note"><b>${f.confidence ? `Confidence is ${esc(f.confidence)}.` : 'On confidence.'}</b> ${rich(f.confidence_reason)}</p>`, 50, 'note') : '',
   ].filter(Boolean).join('')
 
-  const figs = (f.examples ?? []).map((e, i) => figure(e, i + 1, images))
+  const figs = (f.examples ?? []).map((e, i) => drop(figure(e, i + 1, images), i === 0 ? 90 : 300 + i, 'exhibit'))
   // Four or more screenshots go two to a row. Full width, six of them are
   // three pages of pictures between the evidence and the fix.
   const shots = (f.examples ?? []).filter((e) => e.image_path).length
   const exhibits = splitBlk(count(figs.length, 'Exhibit'), figs,
-    `<div class="figs${shots >= 4 ? ' two' : ''}" data-items>%s</div>`)
+    `<div class="figs${shots >= 4 ? ' two' : ''}" data-items data-total="${figs.length}" data-noun="exhibit">%s</div>`)
 
   const steps = (f.steps ?? []).filter(has)
-    .map((st, i) => `<li><span class="sn">${i + 1}</span>${rich(st)}</li>`)
+    .map((st, i) => drop(`<li><span class="sn">${i + 1}</span>${rich(st)}</li>`,
+      i === 0 ? null : i < 4 ? 60 + i : 100 + i, 'step'))
   const lead = has(f.action) ? `<p class="fixlead">${rich(f.action)}</p>` : ''
   const fix = splitBlk('The fix', steps, '<ol class="steps" data-items>%s</ol>', 'fix', lead)
 
@@ -272,9 +288,11 @@ function findingPage(
     (behind ? `<section class="blk tight">${behind}</section>` : '') +
     exhibits + fix +
     (waits ? `<section class="blk tight">${waits}</section>` : '') +
-    proof + blk('What has happened since', since) + record
+    proof + blk('What has happened since', since) +
+    (compact ? '<p class="note dropnote" hidden></p>' : '') + record
 
-  return pageOf({ kind: 'finding', label: 'Findings', cont: title, ref: f.ref, fid: f.id }, inner, running, folio)
+  return pageOf({ kind: compact ? 'finding-compact' : 'finding', label: 'Findings', cont: title, ref: f.ref, fid: f.id },
+    inner, running, folio)
 }
 
 /* ------------------------------------------------------------ front matter */
@@ -518,6 +536,9 @@ export function buildPrintDocument(
   const counts = { P1: 0, P2: 0, P3: 0, P4: 0 } as Record<string, number>
   for (const f of ordered) if (f.band) counts[f.band]++
   const refOf = new Map(findings.map((f) => [f.id, f.ref]))
+  // One page per finding, chosen in the export dialog. Off, a long finding
+  // runs onto a second page and nothing is left out.
+  const compact = (audit as unknown as { doc_compact?: boolean }).doc_compact === true
   const running = `${brand.name} / ${audit.title}`
 
   const id = identityOf(brand)
@@ -624,7 +645,7 @@ export function buildPrintDocument(
     contents: (folio) => index(folio),
     method: (folio) => methodPage(audit, scored.length > 0, running, folio),
     findings: (folio) =>
-      ordered.map((f, i) => findingPage(f, running, folio + i, images, refOf, sheetUrl)).join(''),
+      ordered.map((f, i) => findingPage(f, running, folio + i, images, refOf, sheetUrl, compact)).join(''),
     roadmap: (folio) => roadmapPage(ordered, running, folio),
     appendix: (folio) => appendixPage(ordered, running, folio),
   }
@@ -705,6 +726,87 @@ export const LAYOUT_SCRIPT = `
     return next;
   }
 
+  /* Compact mode. One page, always. Screenshots shrink, the page is scaled a
+     little, and if that is not enough the least important items come off one
+     at a time, highest data-drop first, until it fits. What came off is
+     counted in a note, so nothing disappears silently. */
+  function squeeze(page) {
+    var box = page.querySelector('.pg');
+    var flow = box && box.querySelector('.flow');
+    if (!flow) return;
+    var avail = availOf(box);
+    var FLOOR = 0.82;
+    flow.style.transform = ''; flow.style.width = '100%';
+    if (flow.scrollHeight <= avail + 1) return;
+    if (flow.querySelector('.figimg')) {
+      for (var z = 1; z < FIG.length; z++) {
+        flow.style.setProperty('--figh', FIG[z]);
+        if (flow.scrollHeight <= avail / FLOOR) break;
+      }
+    }
+    var cut = {}, order = [];
+    var note = flow.querySelector('.dropnote');
+    var say = function () {
+      if (!note) return;
+      var bits = order.filter(function (k) { return k !== 'note'; }).map(function (k) {
+        return cut[k] + ' ' + (cut[k] === 1 ? k : k + 's');
+      });
+      if (!bits.length) return;
+      var said = bits.length > 1 ? bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1] : bits[0];
+      note.textContent = 'Kept to one page. Not shown here: ' + said + '. The full record has them.';
+      // Shown as soon as there is something to say, so the line it takes is
+      // part of what the page is measured with.
+      note.hidden = false;
+    };
+    for (var g = 0; g < 200 && flow.scrollHeight > avail / FLOOR; g++) {
+      var marked = flow.querySelectorAll('[data-drop]'), worst = null;
+      for (var m = 0; m < marked.length; m++) {
+        if (!worst || +marked[m].getAttribute('data-drop') > +worst.getAttribute('data-drop')) worst = marked[m];
+      }
+      if (!worst) break;
+      var kind = worst.getAttribute('data-kind') || 'item';
+      if (!cut[kind]) { cut[kind] = 0; order.push(kind); }
+      cut[kind]++;
+      var holder = worst.parentNode;
+      holder.removeChild(worst);
+      // A block whose last item just went has nothing left to head.
+      if (holder.hasAttribute('data-items') && !holder.children.length) {
+        var blk = holder.closest('.blk');
+        if (blk && !blk.querySelector('[data-once]')) blk.parentNode.removeChild(blk);
+        else if (holder.parentNode) holder.parentNode.removeChild(holder.tagName === 'TBODY' ? holder.parentNode : holder);
+      } else if (holder.classList.contains('blk') && !holder.children.length) {
+        holder.parentNode.removeChild(holder);
+      }
+      say();
+    }
+    // Say how many exhibits are showing, when some are not.
+    var lists = flow.querySelectorAll('[data-total]');
+    for (var l = 0; l < lists.length; l++) {
+      var total = +lists[l].getAttribute('data-total'), shown = lists[l].children.length;
+      var lab = lists[l].closest('.blk') && lists[l].closest('.blk').querySelector('.sect');
+      if (lab && shown < total) lab.textContent = shown + ' of ' + total + ' ' + lists[l].getAttribute('data-noun') + 's';
+    }
+    // Nothing left to take off and still too long: the prose itself is
+    // shortened to a line count that fits, which is at least visible.
+    if (flow.scrollHeight > avail / FLOOR) {
+      var lines = [12, 9, 7, 5, 4, 3];
+      flow.classList.add('clamped');
+      for (var c = 0; c < lines.length; c++) {
+        flow.style.setProperty('--cl', lines[c]);
+        if (flow.scrollHeight <= avail / FLOOR) break;
+      }
+      // Only claim it if a paragraph really was cut.
+      var prose = flow.querySelectorAll('.body, .steps li, .fixlead'), cutText = false;
+      for (var q = 0; q < prose.length; q++) if (prose[q].scrollHeight > prose[q].clientHeight + 1) cutText = true;
+      if (!cutText) flow.classList.remove('clamped');
+      else if (note) {
+        note.textContent = (note.hidden ? 'Kept to one page. ' : note.textContent + ' ') + 'Some wording is shortened.';
+        note.hidden = false;
+      }
+    }
+    if (flow.scrollHeight > avail + 1) scaleTo(flow, avail, HARD);
+  }
+
   function spill(page) {
     var box = page.querySelector('.pg');
     var flow = box && box.querySelector('.flow');
@@ -775,7 +877,8 @@ export const LAYOUT_SCRIPT = `
 
   function layout() {
     for (var p = document.body.firstElementChild; p; p = p.nextElementSibling) {
-      if (p.classList && p.classList.contains('page')) spill(p);
+      if (!p.classList || !p.classList.contains('page')) continue;
+      if (p.getAttribute('data-kind') === 'finding-compact') squeeze(p); else spill(p);
     }
     var pages = document.querySelectorAll('.page');
     var at = {};

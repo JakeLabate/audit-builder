@@ -119,6 +119,12 @@ a{color:inherit}
 .fixlead+.steps{margin-top:3.4mm}
 .sect+.steps{margin-top:0}
 
+/* Compact mode's last resort, when nothing is left to take off. */
+.clamped .body,.clamped .steps li,.clamped .fixlead{
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--cl,99);overflow:hidden}
+.dropnote{margin-top:4mm;font-style:italic}
+.dropnote[hidden]{display:none}
+.dropnote+.record{margin-top:1.2mm}
 .record{margin-top:5mm;font-size:7.8pt;color:var(--muted);line-height:1.4}
 
 .foot{position:absolute;left:18mm;right:18mm;bottom:9mm;display:flex;justify-content:space-between;gap:6mm;font-family:var(--mono);font-size:7.4pt;color:var(--muted);letter-spacing:.1em;border-top:1px solid var(--line);padding-top:2.5mm}
