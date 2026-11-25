@@ -157,6 +157,11 @@ a{color:inherit}
   font-family:var(--mono);font-size:7.2pt;letter-spacing:.14em;color:var(--muted);
   text-transform:uppercase;margin-top:2mm;display:block;
 }
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:0 9mm;align-items:start}
+.duo table{table-layout:fixed}
+.duo td{font-size:9pt}
+.duo td:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:3mm}
+.duo td.num{width:36mm;white-space:nowrap;text-align:right;padding-left:0}
 .formula{
   background:var(--brand-wash);border:1px solid var(--brand-rule);border-radius:1mm;
   padding:5mm;margin:4mm 0;font-family:var(--mono);font-size:8.6pt;text-align:center;
