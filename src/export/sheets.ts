@@ -108,20 +108,28 @@ export async function getToken(): Promise<string> {
   })
 }
 
+/** Google answers 429 and 5xx when it is busy, not when the request is wrong.
+ *  Those are retried a few times before the export gives up. */
+const RETRY = new Set([429, 500, 502, 503, 504])
+
 async function api(token: string, url: string, init?: RequestInit) {
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-  })
-  if (!res.ok) {
+  let last = ''
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 800 * 2 ** (attempt - 1)))
+    const res = await fetch(url, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(init?.headers ?? {}),
+      },
+    })
+    if (res.ok) return res.json()
     const body = await res.text()
-    throw new Error(`Google API ${res.status}: ${body.slice(0, 300)}`)
+    last = `Google API ${res.status}: ${body.slice(0, 300)}`
+    if (!RETRY.has(res.status)) break
   }
-  return res.json()
+  throw new Error(last)
 }
 
 /* ---------- content ---------- */
