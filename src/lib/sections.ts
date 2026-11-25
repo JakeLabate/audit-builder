@@ -28,29 +28,29 @@ export const CATALOGUE: {
   },
   {
     key: 'summary', name: 'What we found', pages: 1,
-    what: 'The shape of the audit before any detail: findings by band, by category, total effort, and the five highest scoring.',
+    what: 'The shape of the audit before any detail: findings by category, and by band, effort, owner and metric at risk wherever those are filled in.',
   },
   {
     key: 'contents', name: 'Contents', pages: 1,
-    what: 'Every finding listed with its band and page number.',
+    what: 'Every finding listed with its reference and page number, and its band when it is scored.',
   },
   {
     key: 'method', name: 'Method and scope', pages: 1,
-    what: 'What was covered, the tools and windows the audit declared, what it could not see, and how the priority score is built.',
+    what: 'What was covered, the tools the audit declared, and what it could not see. Explains the priority score when findings are scored.',
     needs: (a) => (a.scope_note || (a.sources ?? []).length ? null
       : 'This audit has no scope note and no declared sources, so the section would print almost empty.'),
   },
   {
     key: 'findings', name: 'Findings', pages: 'per-finding',
-    what: 'One page per finding: the claim, the evidence, the exhibits, the fix and the decision rail.',
+    what: 'Each finding starts on its own page: the claim, why it matters, the evidence with its exhibits, the fix and how it will be verified. A long one runs onto a second page rather than losing anything.',
   },
   {
     key: 'roadmap', name: 'Roadmap', pages: 1,
-    what: 'The work grouped into waves, with effort totalled per wave and a running total.',
+    what: 'The fixes in order, with owners and effort where they are set, grouped into waves once findings are scheduled.',
   },
   {
     key: 'appendix', name: 'How to read this', pages: 1,
-    what: 'What each part of a finding page means, and what the bands and the score are saying. Worth including for a client who has not had one of these before.',
+    what: 'What each part of a finding page means. Worth including for a client who has not had one of these before.',
   },
 ]
 

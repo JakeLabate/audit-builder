@@ -230,6 +230,27 @@ export async function uploadBrandAsset(
   return path
 }
 
+/**
+ * Many evidence paths to addresses a browser can load, in one request. The
+ * document needs every exhibit image at once, and signing them one at a time
+ * is a request per screenshot. A path that is already a web address passes
+ * through; one that cannot be signed is left out, and the document prints
+ * that exhibit's caption without a frame.
+ */
+export async function evidenceUrls(paths: string[], seconds = 6 * 3600): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  const stored: string[] = []
+  for (const p of new Set(paths.filter(Boolean))) {
+    if (/^https?:\/\//i.test(p)) out[p] = p
+    else stored.push(p)
+  }
+  if (!stored.length) return out
+  const { data, error } = await supabase.storage.from('evidence').createSignedUrls(stored, seconds)
+  if (error || !data) return out
+  for (const d of data) if (d.path && d.signedUrl && !d.error) out[d.path] = d.signedUrl
+  return out
+}
+
 export async function evidenceUrl(path: string): Promise<string | null> {
   // A brand logo is often already hosted: a CDN, a press kit, a design system.
   // Requiring an upload for something that has a stable URL is friction for no
