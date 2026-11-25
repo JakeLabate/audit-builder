@@ -1,7 +1,7 @@
 import type { Audit, Brand, Example, FindingFull } from '../lib/types'
 import { categoryOf, isCategoryPath } from '../lib/taxonomy'
 import { BAND_LABEL } from '../lib/score'
-import { fontHref, identityOf, reportPalette } from '../lib/brand'
+import { contrast, fontHref, identityOf, reportPalette, shade } from '../lib/brand'
 import { sectionsOf, type SectionKey } from '../lib/sections'
 import { clientFindings } from '../lib/depth'
 import { kindOf } from '../lib/kind'
@@ -333,8 +333,16 @@ function summaryPage(findings: FindingFull[], running: string, folio: number): s
     }
     return [...m.entries()].sort((a, b) => b[1].n - a[1].n)
   }
+  // A tally is a summary. Past five lines it is the list again, and it pushes
+  // the page it is summarising onto a second sheet, so the tail is counted.
+  const capped = (rows: [string, { n: number; days: number }][], line: (k: string, e: { n: number; days: number }) => string) => {
+    if (rows.length <= 6) return rows.map(([k, e]) => line(k, e))
+    const rest = rows.slice(5)
+    const sum = rest.reduce((a, [, e]) => ({ n: a.n + e.n, days: a.days + e.days }), { n: 0, days: 0 })
+    return [...rows.slice(0, 5).map(([k, e]) => line(k, e)), line(`${rest.length} others`, sum)]
+  }
   const owners = tally((f) => f.owner)
-  const ownerRows = owners.map(([o, e]) =>
+  const ownerRows = capped(owners, (o, e) =>
     `<tr><td>${esc(o)}</td><td class="num">${count(e.n, 'finding')}${e.days ? ` &nbsp;·&nbsp; ${count(e.days, 'day')}` : ''}</td></tr>`)
   const unowned = n - owners.reduce((t, [, e]) => t + e.n, 0)
   if (ownerRows.length && unowned) ownerRows.push(`<tr><td>No owner yet</td><td class="num">${count(unowned, 'finding')}</td></tr>`)
@@ -342,19 +350,26 @@ function summaryPage(findings: FindingFull[], running: string, folio: number): s
   // work. The table waits until most of it has somebody's name on it.
   const showOwners = unowned <= n / 2
 
-  const metricRows = tally((f) => f.metric_at_risk).map(([m, e]) =>
+  const metricRows = capped(tally((f) => f.metric_at_risk), (m, e) =>
     `<tr><td>${esc(m)}</td><td class="num">${count(e.n, 'finding')}</td></tr>`)
 
   const top = [...scored].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 5).map((f) =>
     `<tr><td class="dt">${esc(f.ref)}</td><td>${esc(f.title)}</td><td class="num">${f.score}</td></tr>`)
 
   const table = (cls: string) => `<table class="ev ${cls}"><tbody data-items>%s</tbody></table>`
+  // The two tallies sit side by side when both exist. Stacked, they are what
+  // pushed a full audit's summary onto a second sheet.
+  const owned = showOwners ? ownerRows : []
+  const half = (label: string, rows: string[]) =>
+    `<div><div class="sect">${label}</div><table class="ev"><tbody>${rows.join('')}</tbody></table></div>`
+  const tallies = metricRows.length && owned.length
+    ? `<section class="blk duo">${half('What is at risk', metricRows)}${half('Who owns the work', owned)}</section>`
+    : splitBlk('What is at risk', metricRows, table('tbl-metric')) + splitBlk('Who owns the work', owned, table('tbl-own'))
   const inner = `<div class="sect" data-keep>What we found</div><h1 class="ttl" data-keep>${esc(headline)}</h1>` +
     bands +
     splitBlk('Where they sit', catRows, table('tbl-cat')) +
     splitBlk('Highest scoring', top, table('tbl-top')) +
-    splitBlk('What is at risk', metricRows, table('tbl-metric')) +
-    (showOwners ? splitBlk('Who owns the work', ownerRows, table('tbl-own')) : '')
+    tallies
 
   return pageOf({ kind: 'summary', label: 'Summary', cont: 'What we found' }, inner, running, folio)
 }
@@ -507,6 +522,11 @@ export function buildPrintDocument(
 
   const id = identityOf(brand)
   const pal = reportPalette(id)
+  // The accent sets every section label and link, which are small type on
+  // white. A pale accent (a yellow, a light orange) is fine as a fill and
+  // unreadable as 7pt text, so for text it is darkened until it can be read.
+  let accentText = pal.accent
+  for (let i = 0; i < 12 && contrast(accentText, '#FFFFFF') < 4.5; i++) accentText = shade(accentText, -0.12)
 
   // The brand's own colours and faces, injected as variables the print
   // stylesheet already reads. A pale brand colour would make white cover text
@@ -515,9 +535,9 @@ export function buildPrintDocument(
     @import url('${fontHref(id)}');
     :root{
       --brand:${pal.primary}; --brand-on:${pal.onPrimary}; --brand-ink:${pal.ink};
-      --brand-accent:${pal.accent}; --brand-wash:${pal.wash}; --brand-rule:${pal.rule};
+      --brand-accent:${accentText}; --brand-wash:${pal.wash}; --brand-rule:${pal.rule};
       --disp:'${id.type.display}',Georgia,serif; --body:'${id.type.body}',Arial,sans-serif;
-      --teal-d:${pal.accent};
+      --teal-d:${accentText};
     }
     .cover{background:${pal.primary};color:${pal.onPrimary}}
     .cover .chip{background:transparent;border:1px solid ${pal.onPrimary};color:${pal.onPrimary}}
