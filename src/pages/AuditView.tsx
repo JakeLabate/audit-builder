@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import Deliverables from '../components/Deliverables'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Deliverables, { DeliverablesRail } from '../components/Deliverables'
+import { listExports, type ExportRow } from '../lib/exports'
 import { Link, useParams } from 'react-router-dom'
 import {
   evidenceUrl, createFinding, getAudit, listBrands, listFindings, nextRef, updateAudit, updateFindings, withBands,
@@ -42,6 +43,11 @@ export default function AuditView() {
   const [q, setQ] = useState('')
   const [toast, setToast] = useState<{ msg: string; url?: string } | null>(null)
   const [exported, setExported] = useState(0)
+  // What this audit has exported. Read here, not in the panel, because the
+  // rail shows the count whether the panel is open or not.
+  const [exportRows, setExportRows] = useState<ExportRow[] | null>(null)
+  const [exportErr, setExportErr] = useState<string | null>(null)
+  const [dlvOpen, setDlvOpen] = useState(false)
   // Resolved once when the dialog opens, so the preview and the printed
   // file are built from the same inputs.
   const [ex, setEx] = useState<{ byline: string; logoUrl: string | null } | null>(null)
@@ -115,11 +121,32 @@ export default function AuditView() {
 
   const current = findings.find((f) => f.id === sel) ?? null
 
+  const loadExports = useCallback(async () => {
+    if (!auditId) return
+    try {
+      setExportRows(await listExports(auditId))
+      setExportErr(null)
+    } catch (e) {
+      setExportErr(`The exports could not be read. ${(e as Error).message}`)
+    }
+  }, [auditId])
+  useEffect(() => { void loadExports() }, [loadExports, exported])
+
+  // Escape closes the panel, unless a dialog is open on top of it: that one
+  // gets the key first.
+  useEffect(() => {
+    if (!dlvOpen || ex || builder) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDlvOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [dlvOpen, ex, builder])
+
   const cov = useMemo(() => coverage(checks), [checks])
   const checkGroups = useMemo(() => groupByPath(checks), [checks])
 
   const switchView = (v: 'findings' | 'checks') => {
     setView(v)
+    setDlvOpen(false)
     setMview('list')
     if (phone()) window.scrollTo(0, 0)
   }
@@ -297,20 +324,32 @@ export default function AuditView() {
         )
       })()}
 
-      <div className={`split m-${mview}`}>
+      <div className={`split has-rail m-${mview}${dlvOpen ? ' dlv-open' : ''}`}>
+        {/* Wide screens: a rail down the left edge, the full height of the
+            workspace. Narrow ones have no room for a rail, so the same panel
+            is a third tab in the bar below. */}
+        <DeliverablesRail count={exportRows?.length ?? null} open={dlvOpen}
+          onToggle={() => setDlvOpen((v) => !v)} />
+
         <div className="list">
           <div className="listbar">
             <div className="vtabs" role="tablist" aria-label="Audit views">
-              <button role="tab" aria-selected={view === 'findings'} className={'vtab' + (view === 'findings' ? ' on' : '')}
+              <button role="tab" aria-selected={!dlvOpen && view === 'findings'}
+                className={'vtab' + (!dlvOpen && view === 'findings' ? ' on' : '')}
                 onClick={() => switchView('findings')}>
                 Findings <b>{findings.length}</b>
               </button>
-              <button role="tab" aria-selected={view === 'checks'} className={'vtab' + (view === 'checks' ? ' on' : '')}
+              <button role="tab" aria-selected={!dlvOpen && view === 'checks'}
+                className={'vtab' + (!dlvOpen && view === 'checks' ? ' on' : '')}
                 onClick={() => switchView('checks')}>
                 Checklist {cov.total > 0 && <b>{cov.checked}/{cov.total}</b>}
               </button>
+              <button role="tab" aria-selected={dlvOpen} className={'vtab narrow' + (dlvOpen ? ' on' : '')}
+                onClick={() => { setDlvOpen(true); setMview('list'); if (phone()) window.scrollTo(0, 0) }}>
+                Deliverables {!!exportRows?.length && <b>{exportRows.length}</b>}
+              </button>
             </div>
-            {view === 'findings' && (
+            {!dlvOpen && view === 'findings' && (
               <>
                 <input placeholder="Filter findings" value={q} onChange={(e) => setQ(e.target.value)} />
                 <button className="btn sm pri" onClick={add}>New</button>
@@ -318,7 +357,12 @@ export default function AuditView() {
             )}
           </div>
 
-          {view === 'checks' && (cov.total === 0 ? (
+          {dlvOpen && (
+            <Deliverables rows={exportRows} error={exportErr} onChanged={loadExports}
+              onClose={() => setDlvOpen(false)} onExport={openExport} />
+          )}
+
+          {!dlvOpen && view === 'checks' && (cov.total === 0 ? (
             <div className="list-empty">
               No checklist on this audit. It is optional.
               <div style={{ marginTop: 12 }}>
@@ -355,7 +399,7 @@ export default function AuditView() {
             </>
           ))}
 
-          {view === 'findings' && (<>
+          {!dlvOpen && view === 'findings' && (<>
           {audit.status === 'delivered' && stageCounts.length > 0 && (
             <div className="stagesum">
               {stageCounts.map(([s, n]) => (
@@ -439,8 +483,6 @@ export default function AuditView() {
           )}
         </div>
       </div>
-
-      {audit && <Deliverables auditId={audit.id} reload={exported} />}
 
       {ex && brand && (
         <ExportModal
