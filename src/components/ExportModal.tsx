@@ -45,6 +45,9 @@ export default function ExportModal({
   onExported: () => void
 }) {
   const [tab, setTab] = useState<Tab>('document')
+  // Phones show the options or the preview, never both: stacked, each got
+  // under half a screen. Only the phone stylesheet reads this.
+  const [mv, setMv] = useState<'options' | 'preview'>('options')
   const [sections, setSections] = useState<SectionChoice[]>(() => sectionsOf(audit))
   // Null until somebody changes a column by hand. Until then the columns
   // follow the findings, and nothing is stored, so a field filled in later
@@ -88,14 +91,17 @@ export default function ExportModal({
   useLayoutEffect(() => {
     const el = stage.current
     if (!el || tab !== 'document') return
-    const fit = () => setScale(Math.min(
-      1, (el.clientWidth - 28) / PAGE_W, (el.clientHeight - 28) / PAGE_H,
-    ))
+    const fit = () => {
+      // Hidden on a phone until the preview is asked for, and a hidden box
+      // measures zero.
+      if (el.clientWidth < 60) return
+      setScale(Math.min(1, (el.clientWidth - 28) / PAGE_W, (el.clientHeight - 28) / PAGE_H))
+    }
     fit()
     const ro = new ResizeObserver(fit)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [tab])
+  }, [tab, mv])
 
   useEffect(() => {
     if (tab !== 'document') return
@@ -232,7 +238,7 @@ export default function ExportModal({
           <button className="modal-x" onClick={onClose} aria-label="Close" disabled={busy}>×</button>
         </header>
 
-        <div className="modal-bd">
+        <div className={`modal-bd mv-${mv}`}>
           <div className="rs-pane">
             {tab === 'document' ? (
               <>
@@ -414,6 +420,9 @@ export default function ExportModal({
               && ` ${hidden} internal ${hidden === 1 ? 'finding is' : 'findings are'} excluded from both.`}
           </span>
           <span className="grow" />
+          <button className="btn m-only mv-btn" onClick={() => setMv((v) => (v === 'options' ? 'preview' : 'options'))}>
+            {mv === 'options' ? 'Preview' : 'Options'}
+          </button>
           <button className="btn" onClick={onClose} disabled={busy}>
             {done ? 'Done' : 'Close'}
           </button>

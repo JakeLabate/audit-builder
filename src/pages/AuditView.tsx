@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Deliverables from '../components/Deliverables'
 import { Link, useParams } from 'react-router-dom'
 import {
@@ -54,6 +54,25 @@ export default function AuditView() {
   }
 
   const [stageFilter, setStageFilter] = useState<string | null>(null)
+  // A phone cannot show the list and the editor side by side, so it shows one
+  // at a time: the list first, then the finding that was tapped. The classes
+  // only mean something under the phone breakpoint; a desktop shows both.
+  const [mview, setMview] = useState<'list' | 'detail'>('list')
+  const [metaOpen, setMetaOpen] = useState(false)
+  // Where the list was scrolled to, so going back lands on the finding that
+  // was just read instead of the top of the list.
+  const listY = useRef(0)
+  const phone = () => window.matchMedia('(max-width:760px)').matches
+  const openFinding = (id: string) => {
+    if (mview === 'list') listY.current = window.scrollY
+    setSel(id)
+    setMview('detail')
+    if (phone()) window.scrollTo(0, 0)
+  }
+  const backToList = () => {
+    setMview('list')
+    if (phone()) requestAnimationFrame(() => window.scrollTo(0, listY.current))
+  }
 
   const shown = useMemo(() => {
     const s = q.toLowerCase()
@@ -88,7 +107,7 @@ export default function AuditView() {
       collected_to: audit.evidence_to,
     })
     setFindings((p) => withBands([...p, f]))
-    setSel(f.id)
+    openFinding(f.id)
   }
 
   async function openExport() {
@@ -117,10 +136,29 @@ export default function AuditView() {
           </span>
         </div>
         <span className="grow" />
+        <button className="btn sm m-only" onClick={() => setMetaOpen((v) => !v)}>Settings</button>
         <button className="btn sm pri" onClick={openExport}>Export</button>
       </div>
 
-      <div className="split">
+      {/* Phones only: the way back to the list, and a step to the next finding
+          without going back first. */}
+      {mview === 'detail' && current && (() => {
+        const i = shown.findIndex((f) => f.id === current.id)
+        return (
+          <div className="mnav">
+            <button className="mnav-back" onClick={backToList}>
+              <span aria-hidden="true">&lsaquo;</span> Findings
+            </button>
+            <span className="mnav-n">{i >= 0 ? `${i + 1} of ${shown.length}` : ''}</span>
+            <button className="mnav-step" aria-label="Previous finding" disabled={i <= 0}
+              onClick={() => openFinding(shown[i - 1].id)}>&lsaquo;</button>
+            <button className="mnav-step" aria-label="Next finding" disabled={i < 0 || i >= shown.length - 1}
+              onClick={() => openFinding(shown[i + 1].id)}>&rsaquo;</button>
+          </div>
+        )
+      })()}
+
+      <div className={`split m-${mview}`}>
         <div className="list">
           <div className="listbar">
             <input placeholder="Filter findings" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -142,7 +180,7 @@ export default function AuditView() {
             </div>
           ) : (
             shown.map((f) => (
-              <div className="frow" key={f.id} aria-selected={f.id === sel} onClick={() => setSel(f.id)}>
+              <div className="frow" key={f.id} aria-selected={f.id === sel} onClick={() => openFinding(f.id)}>
                 <span className="ref">{f.ref}</span>
                 <span className="nm">
                   {f.title || <em className="untitled">Untitled</em>}
@@ -179,6 +217,7 @@ export default function AuditView() {
                 onDeleted={() => {
                   setFindings((p) => withBands(p.filter((x) => x.id !== current.id)))
                   setSel(null)
+                  setMview('list')
                 }}
               />
             )
@@ -218,6 +257,7 @@ export default function AuditView() {
         </div>
       )}
       <AuditMeta audit={audit} findings={findings} onChange={setAudit}
+        open={metaOpen} setOpen={setMetaOpen}
         cycleDays={registryOf(brand).crawl_cycle_days}
         onFindings={(ids, patch) => setFindings((p) => withBands(p.map((x) => (ids.includes(x.id) ? { ...x, ...patch } : x))))} />
     </>
@@ -226,15 +266,16 @@ export default function AuditView() {
 
 /** Audit-level fields the document needs but the finding list does not show. */
 function AuditMeta({
-  audit, findings, onChange, onFindings, cycleDays,
+  audit, findings, onChange, onFindings, cycleDays, open, setOpen,
 }: {
+  open: boolean
+  setOpen: (fn: (v: boolean) => boolean) => void
   audit: Audit
   findings: FindingFull[]
   cycleDays: number
   onChange: (a: Audit) => void
   onFindings: (ids: string[], patch: Partial<FindingFull>) => void
 }) {
-  const [open, setOpen] = useState(false)
   const [cascade, setCascade] = useState<{
     what: string; next: string; rows: CascadeRow[]; patch: Partial<FindingFull>
   } | null>(null)
@@ -280,13 +321,13 @@ function AuditMeta({
   }
 
   return (
-    <div style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 30 }}>
+    <div className="am">
       {open && (
-        <div style={{
-          background: 'var(--surface)', border: '1px solid var(--line)', padding: 16,
-          width: 330, marginBottom: 8, boxShadow: '0 14px 40px rgba(25,26,62,.18)',
-          maxHeight: '70vh', overflow: 'auto',
-        }}>
+        <div className="am-panel">
+          <div className="am-hd m-only">
+            <b>Audit settings</b>
+            <button className="modal-x" aria-label="Close audit settings" onClick={() => setOpen(() => false)}>&times;</button>
+          </div>
           <div className="fld">
             <label>Audit title</label>
             <input value={audit.title}
@@ -340,7 +381,7 @@ function AuditMeta({
           </div>
         </div>
       )}
-      <button className="btn" onClick={() => setOpen((v) => !v)}>
+      <button className="btn am-fab" onClick={() => setOpen((v) => !v)}>
         {open ? 'Close audit settings' : 'Audit settings'}
       </button>
       {cascade && (
