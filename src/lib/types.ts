@@ -129,6 +129,9 @@ export interface Audit {
   gaps: string | null
   urls_crawled: number | null
   delivered_on: string | null
+  /** The checklist this audit was started from, by name. The checks were
+   *  copied in, so this is a label, not a link. */
+  checklist_name?: string | null
   /** Hold each finding to one page in the document. Off, a long finding runs
    *  onto a second page and nothing is left out. */
   doc_compact?: boolean

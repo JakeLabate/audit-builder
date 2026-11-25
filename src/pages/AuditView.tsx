@@ -14,6 +14,16 @@ import { STAGE_LABEL, stage } from '../lib/lifecycle'
 import { identityOf } from '../lib/brand'
 import { sheetsConfigured } from '../export/sheets'
 import { supabase } from '../lib/supabase'
+import Checklist, { type CheckFilter } from '../components/Checklist'
+import ChecklistBuilder, { type BuilderResult } from '../components/ChecklistBuilder'
+import {
+  coverage, coverageLine, groupByPath, sectionsWithCoverage, toSpec,
+  type AuditCheck, type AuditTemplate, type CheckStatus,
+} from '../lib/checks'
+import { addChecks, createTemplate, deleteCheck, listChecks, listTemplates, updateCheck } from '../lib/checkdata'
+import { isCategoryPath } from '../lib/taxonomy'
+import { sourcesFrom } from '../lib/tools'
+import { sectionsOf } from '../lib/sections'
 
 
 export default function AuditView() {
@@ -21,6 +31,13 @@ export default function AuditView() {
   const [audit, setAudit] = useState<Audit | null>(null)
   const [brand, setBrand] = useState<Brand | null>(null)
   const [findings, setFindings] = useState<FindingFull[]>([])
+  // The checklist is optional, and so is everything that reads it: an audit
+  // without one behaves exactly as it did before checklists existed.
+  const [checks, setChecks] = useState<AuditCheck[]>([])
+  const [view, setView] = useState<'findings' | 'checks'>('findings')
+  const [cat, setCat] = useState<string | null>(null)
+  const [ckFilter, setCkFilter] = useState<CheckFilter>('all')
+  const [builder, setBuilder] = useState<{ templates: AuditTemplate[] } | null>(null)
   const [sel, setSel] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [toast, setToast] = useState<{ msg: string; url?: string } | null>(null)
@@ -42,6 +59,8 @@ export default function AuditView() {
         const fs = await listFindings(auditId)
         setFindings(fs)
         setSel(fs[0]?.id ?? null)
+        // Never the reason an audit fails to open.
+        setChecks(await listChecks(auditId).catch(() => []))
       }
     })()
   }, [auditId])
@@ -96,6 +115,118 @@ export default function AuditView() {
 
   const current = findings.find((f) => f.id === sel) ?? null
 
+  const cov = useMemo(() => coverage(checks), [checks])
+  const checkGroups = useMemo(() => groupByPath(checks), [checks])
+
+  const switchView = (v: 'findings' | 'checks') => {
+    setView(v)
+    setMview('list')
+    if (phone()) window.scrollTo(0, 0)
+  }
+  const openCategory = (c: string | null) => {
+    if (mview === 'list') listY.current = window.scrollY
+    setCat(c)
+    setMview('detail')
+    if (phone()) window.scrollTo(0, 0)
+  }
+  const patchCheck = (id: string, p: Partial<AuditCheck>) =>
+    setChecks((all) => all.map((k) => (k.id === id ? { ...k, ...p } : k)))
+
+  /** Pressing the answer a check already has clears it. */
+  async function setCheckStatus(k: AuditCheck, pressed: CheckStatus) {
+    const next: CheckStatus = k.status === pressed ? 'todo' : pressed
+    const patch: Partial<AuditCheck> = { status: next }
+    if (k.finding_id && next !== 'fail') {
+      const f = findings.find((x) => x.id === k.finding_id)
+      if (!confirm(`This check raised ${f?.ref ?? 'a finding'}. Changing the result keeps that finding in the audit but unlinks it from this check. Continue?`)) return
+      patch.finding_id = null
+    }
+    patchCheck(k.id, patch)
+    try {
+      await updateCheck(k.id, patch)
+    } catch (e) {
+      patchCheck(k.id, { status: k.status, finding_id: k.finding_id })
+      say(`That did not save. ${(e as Error).message}`)
+    }
+  }
+
+  async function setCheckNote(k: AuditCheck, note: string) {
+    patchCheck(k.id, { note: note || null })
+    try {
+      await updateCheck(k.id, { note: note || null })
+    } catch (e) {
+      patchCheck(k.id, { note: k.note })
+      say(`The note did not save. ${(e as Error).message}`)
+    }
+  }
+
+  /**
+   * A failed check becomes a finding. The check supplies what it knows: the
+   * category, which issues the reference, and the first measurement row. The
+   * claim is typed by the person who looked.
+   */
+  async function raiseFinding(k: AuditCheck, title: string) {
+    if (!audit) return
+    const path = isCategoryPath(k.path) ? k.path : null
+    const ref = await nextRef(audit.id, path)
+    const measurements = [{ check: k.title, tool: k.tool, result: k.note ?? '' }]
+    const f = await createFinding(audit.org_id, audit.id, ref, title, findings.length, {
+      raised: audit.started_on ?? undefined,
+      collected_from: audit.evidence_from,
+      collected_to: audit.evidence_to,
+      pillar: path ?? undefined,
+      measurements,
+      source: sourcesFrom(measurements),
+    })
+    setFindings((p) => withBands([...p, f]))
+    try {
+      await updateCheck(k.id, { finding_id: f.id, status: 'fail' })
+      patchCheck(k.id, { finding_id: f.id, status: 'fail' })
+    } catch (e) {
+      // The finding exists and is in the list; only the link is missing.
+      throw new Error(`The finding was created as ${f.ref} but could not be linked to this check. ${(e as Error).message}`)
+    }
+  }
+
+  async function removeCheck(k: AuditCheck) {
+    setChecks((all) => all.filter((x) => x.id !== k.id))
+    try {
+      await deleteCheck(k.id)
+    } catch (e) {
+      setChecks((all) => [...all, k].sort((a, b) => a.position - b.position))
+      say(`That check could not be removed. ${(e as Error).message}`)
+    }
+  }
+
+  async function openBuilder() {
+    setBuilder({ templates: await listTemplates().catch(() => []) })
+  }
+
+  async function addFromBuilder(r: BuilderResult) {
+    if (!audit) return
+    const first = checks.length === 0
+    const startAt = checks.reduce((m, k) => Math.max(m, k.position + 1), 0)
+    const added = await addChecks(audit.org_id, audit.id, r.specs, startAt)
+    setChecks((all) => [...all, ...added])
+    // The first checklist on an audit names it and switches its page on in
+    // the document. Later additions leave both alone.
+    if (first) {
+      const patch = {
+        checklist_name: r.baseName,
+        sections: sectionsWithCoverage(sectionsOf(audit)),
+      } as Partial<Audit>
+      await updateAudit(audit.id, patch).catch(() => undefined)
+      setAudit({ ...audit, ...patch })
+    }
+    setBuilder(null)
+    say(`${added.length} ${added.length === 1 ? 'check' : 'checks'} added.`)
+  }
+
+  async function saveAsTemplate(name: string) {
+    if (!audit) return
+    await createTemplate(audit.org_id, name, checks.map(toSpec))
+  }
+
   async function add() {
     if (!audit) return
     // No category yet, so the reference is Uncategorized/n until one is
@@ -142,7 +273,15 @@ export default function AuditView() {
 
       {/* Phones only: the way back to the list, and a step to the next finding
           without going back first. */}
-      {mview === 'detail' && current && (() => {
+      {view === 'checks' && mview === 'detail' && (
+        <div className="mnav">
+          <button className="mnav-back" onClick={backToList}>
+            <span aria-hidden="true">&lsaquo;</span> Checklist
+          </button>
+          <span className="mnav-n">{cat ?? 'All checks'}</span>
+        </div>
+      )}
+      {view === 'findings' && mview === 'detail' && current && (() => {
         const i = shown.findIndex((f) => f.id === current.id)
         return (
           <div className="mnav">
@@ -161,9 +300,62 @@ export default function AuditView() {
       <div className={`split m-${mview}`}>
         <div className="list">
           <div className="listbar">
-            <input placeholder="Filter findings" value={q} onChange={(e) => setQ(e.target.value)} />
-            <button className="btn sm pri" onClick={add}>New</button>
+            <div className="vtabs" role="tablist" aria-label="Audit views">
+              <button role="tab" aria-selected={view === 'findings'} className={'vtab' + (view === 'findings' ? ' on' : '')}
+                onClick={() => switchView('findings')}>
+                Findings <b>{findings.length}</b>
+              </button>
+              <button role="tab" aria-selected={view === 'checks'} className={'vtab' + (view === 'checks' ? ' on' : '')}
+                onClick={() => switchView('checks')}>
+                Checklist {cov.total > 0 && <b>{cov.checked}/{cov.total}</b>}
+              </button>
+            </div>
+            {view === 'findings' && (
+              <>
+                <input placeholder="Filter findings" value={q} onChange={(e) => setQ(e.target.value)} />
+                <button className="btn sm pri" onClick={add}>New</button>
+              </>
+            )}
           </div>
+
+          {view === 'checks' && (cov.total === 0 ? (
+            <div className="list-empty">
+              No checklist on this audit. It is optional.
+              <div style={{ marginTop: 12 }}>
+                <button className="btn sm pri" onClick={openBuilder}>Add a checklist</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="stagesum">
+                {([['all', 'All', cov.total], ['todo', 'To do', cov.todo], ['fail', 'Failed', cov.fail]] as [CheckFilter, string, number][])
+                  .map(([f, label, n]) => (
+                    <button key={f} className={`stg-chip${ckFilter === f ? ' on' : ''}`} aria-pressed={ckFilter === f}
+                      onClick={() => setCkFilter(f)}>
+                      {label} <b>{n}</b>
+                    </button>
+                  ))}
+              </div>
+              <div className="frow crow" aria-selected={cat === null} onClick={() => openCategory(null)}>
+                <span className="nm">All checks<span>{coverageLine(cov)}</span></span>
+                <span className={`pill ${cov.todo === 0 ? 'done' : 'none'}`}>{cov.checked}/{cov.total}</span>
+              </div>
+              {checkGroups.map((g) => {
+                const c = coverage(g.subs.flatMap((s) => s.items))
+                return (
+                  <div className="frow crow" key={g.category} aria-selected={cat === g.category}
+                    onClick={() => openCategory(g.category)}>
+                    <span className="nm">{g.category}
+                      <span>{c.checked} of {c.total} checked{c.fail ? ` · ${c.fail} failed` : ''}</span>
+                    </span>
+                    <span className={`pill ${c.todo === 0 ? 'done' : 'none'}`}>{c.checked}/{c.total}</span>
+                  </div>
+                )
+              })}
+            </>
+          ))}
+
+          {view === 'findings' && (<>
           {audit.status === 'delivered' && stageCounts.length > 0 && (
             <div className="stagesum">
               {stageCounts.map(([s, n]) => (
@@ -193,10 +385,26 @@ export default function AuditView() {
               </div>
             ))
           )}
+          </>)}
         </div>
 
         <div className="pane">
-          {current ? (
+          {view === 'checks' ? (
+            <Checklist
+              audit={audit}
+              checks={checks}
+              findings={findings}
+              category={cat}
+              filter={ckFilter}
+              onStatus={setCheckStatus}
+              onNote={setCheckNote}
+              onRaise={raiseFinding}
+              onRemove={removeCheck}
+              onOpenFinding={(id) => { setView('findings'); openFinding(id) }}
+              onAdd={openBuilder}
+              onSaveTemplate={saveAsTemplate}
+            />
+          ) : current ? (
             audit.mode === 'logic' ? (
               <LogicEditor
                 finding={current}
@@ -216,6 +424,8 @@ export default function AuditView() {
                 onChange={(f) => setFindings((p) => withBands(p.map((x) => (x.id === f.id ? f : x))))}
                 onDeleted={() => {
                   setFindings((p) => withBands(p.filter((x) => x.id !== current.id)))
+                  // The database unlinks the check; the page has to as well.
+                  setChecks((all) => all.map((k) => (k.finding_id === current.id ? { ...k, finding_id: null } : k)))
                   setSel(null)
                   setMview('list')
                 }}
@@ -237,6 +447,7 @@ export default function AuditView() {
           audit={audit}
           brand={brand}
           findings={findings}
+          checks={checks}
           byline={ex.byline}
           logoUrl={ex.logoUrl}
           sheetsReady={sheetsConfigured()}
@@ -244,6 +455,16 @@ export default function AuditView() {
           onClose={() => setEx(null)}
           say={say}
           onExported={() => setExported((n) => n + 1)}
+        />
+      )}
+
+      {builder && (
+        <ChecklistBuilder
+          mode="add"
+          templates={builder.templates}
+          have={checks.map(toSpec)}
+          onClose={() => setBuilder(null)}
+          onDone={addFromBuilder}
         />
       )}
 

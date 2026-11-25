@@ -192,4 +192,11 @@ a{color:inherit}
 .tbl-road td.dt{padding-right:5mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tbl-road td.own{padding-left:5mm;font-size:8.8pt}
 .tbl-read td:first-child{width:36mm;color:var(--ink);font-weight:500;padding-right:5mm}
+.tbl-cov{table-layout:fixed}
+.tbl-cov td.dt{width:28mm;font-size:7.8pt;padding-top:2.5mm}
+.tbl-cov td.sub{color:var(--ink2)}
+.tbl-cov td.num{width:42mm;font-size:8.2pt;color:var(--muted);padding-top:2.4mm;white-space:normal;overflow-wrap:anywhere}
+.tbl-cov tr.cov-pass td.num{color:var(--ink)}
+.tbl-cov tr.cov-fail td.sub{color:var(--ink);font-weight:500}
+.tbl-cov tr.cov-fail td.num{color:var(--teal-d)}
 `

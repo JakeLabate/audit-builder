@@ -6,6 +6,7 @@ import { sectionsOf, type SectionKey } from '../lib/sections'
 import { clientFindings } from '../lib/depth'
 import { kindOf } from '../lib/kind'
 import { scopeOf } from '../lib/scope'
+import { coverage, groupByPath, type AuditCheck } from '../lib/checks'
 
 /**
  * PDF export. The browser's own print engine does the rendering, so there is
@@ -437,6 +438,58 @@ function methodPage(audit: Audit, anyScored: boolean, running: string, folio: nu
 }
 
 /**
+ * What was checked, and how each check came out.
+ *
+ * The findings pages can only say what is wrong. This is the page that says
+ * what was looked at and came back clean, which is most of what a client paid
+ * for and the part an audit usually leaves unsaid. A failed check points at
+ * its finding by reference, but only when that finding is in this document:
+ * an internal finding is never named to the client.
+ */
+function coveragePage(
+  checks: AuditCheck[], refInDoc: Map<string, string>, name: string | null | undefined,
+  running: string, folio: number,
+): string {
+  if (!checks.length) return ''
+  const c = coverage(checks)
+  const headline = c.todo === 0
+    ? `${count(c.total, 'check')}, all of them run`
+    : `${c.checked.toLocaleString('en-US')} of ${count(c.total, 'check')} run`
+
+  // Only the outcomes this audit actually has. A "0 not applicable" tile is a
+  // number that says nothing.
+  const tiles = ([
+    [c.pass, 'Passed'], [c.fail, c.fail === 1 ? 'Raised an issue' : 'Raised issues'],
+    [c.na, 'Not applicable'], [c.todo, 'Not run'],
+  ] as [number, string][]).filter(([n]) => n > 0)
+    .map(([n, l]) => `<div class="sumband"><b>${n}</b><span>${esc(l)}</span></div>`)
+
+  const result = (k: AuditCheck): string => {
+    if (k.status === 'pass') return 'Passed'
+    if (k.status === 'na') return 'Not applicable'
+    if (k.status === 'todo') return 'Not run'
+    const ref = k.finding_id ? refInDoc.get(k.finding_id) : null
+    return ref ? esc(ref) : 'Issue found'
+  }
+  const row = (sub: string, k: AuditCheck) => `<tr class="cov-${k.status}">
+      <td class="dt">${esc(sub)}</td>
+      <td class="sub">${esc(k.title)}${has(k.note) ? `<span class="s">${rich(k.note)}</span>` : ''}</td>
+      <td class="num">${result(k)}</td></tr>`
+  const table = '<table class="ev tbl-cov"><tbody data-items>%s</tbody></table>'
+  const groups = groupByPath(checks).map((g) =>
+    splitBlk(g.category, g.subs.flatMap((s) => s.items.map((k) => row(s.sub, k))), table))
+
+  const lead = `<p class="body">${has(name) ? `This audit worked from the ${esc(name)} checklist. ` : ''}A check
+    that passed leaves no finding behind, so it is listed here: what was looked at is on the record,
+    not only what was wrong.${c.fail ? ' A check that raised an issue names its finding.' : ''}</p>`
+
+  const inner = `<div class="sect" data-keep>What was checked</div><h1 class="ttl" data-keep>${esc(headline)}</h1>` +
+    `<section class="blk">${lead}<div class="sumbands" style="margin-top:4mm">${tiles.join('')}</div></section>` +
+    groups.join('')
+  return pageOf({ kind: 'coverage', label: 'Coverage', cont: 'What was checked' }, inner, running, folio)
+}
+
+/**
  * The work, in order. Grouped into waves when findings have been scheduled,
  * and a plain ordered list when they have not: a roadmap with one group
  * called "Unscheduled" and a column of blanks is not a roadmap.
@@ -526,6 +579,9 @@ export function buildPrintDocument(
   /** Exhibit image paths mapped to addresses a browser can load. Resolved by
    *  the caller for the same reason as the logo. */
   images: Record<string, string> = {},
+  /** The audit's checklist, for the page that says what was looked at. An
+   *  audit without one simply has no such page. */
+  checks: AuditCheck[] = [],
 ): string {
   // exposure exists so a finding can stay in the register without reaching the
   // client. Scored findings lead, highest first; the rest keep the order they
@@ -616,8 +672,11 @@ export function buildPrintDocument(
   const methodHtml = methodPage(audit, scored.length > 0, running, 0)
   const sheets: Record<SectionKey, number> = {
     cover: 1, summary: any ? 1 : 0, contents: any ? 1 : 0, method: methodHtml ? 1 : 0,
+    coverage: checks.length ? 1 : 0,
     findings: ordered.length, roadmap: any ? 1 : 0, appendix: any ? 1 : 0,
   }
+  // Only findings the client is shown can be named on the coverage page.
+  const refInDoc = new Map(ordered.map((f) => [f.id, f.ref]))
   const chosen = sectionsOf(audit).filter((s) => s.on && sheets[s.key] > 0)
   const startOf = {} as Record<SectionKey, number>
   let at = 1
@@ -644,6 +703,7 @@ export function buildPrintDocument(
     summary: (folio) => summaryPage(ordered, running, folio),
     contents: (folio) => index(folio),
     method: (folio) => methodPage(audit, scored.length > 0, running, folio),
+    coverage: (folio) => coveragePage(checks, refInDoc, audit.checklist_name, running, folio),
     findings: (folio) =>
       ordered.map((f, i) => findingPage(f, running, folio + i, images, refOf, sheetUrl, compact)).join(''),
     roadmap: (folio) => roadmapPage(ordered, running, folio),

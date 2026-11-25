@@ -1437,3 +1437,184 @@ input, select, textarea { font-size: 16px }
 @media (max-width:760px){
   .rs-opt{grid-template-columns:44px minmax(0,1fr);padding-left:0}
 }
+
+/* ======================================================================
+   Checklists.
+
+   The audit's list column carries two views now, findings and the
+   checklist, so the tabs sit in the bar that already sticks to the top of
+   it. The checklist itself is a run of cards: what to look at on the left,
+   the three answers on the right, and whatever the answer needs underneath.
+   ====================================================================== */
+.listbar{flex-wrap:wrap}
+.vtabs{flex:1 1 100%;display:flex;gap:2px;margin:-4px -4px 2px}
+.vtab{flex:1;background:none;border:0;border-bottom:2px solid transparent;padding:8px 6px;
+  font-size:13.5px;color:var(--chrome-muted);cursor:pointer;white-space:nowrap}
+.vtab b{font-family:var(--mono);font-weight:500;font-size:11px;margin-left:4px;color:var(--chrome-muted)}
+.vtab:hover{color:#fff}
+.vtab.on{color:#fff;font-weight:600;border-bottom-color:var(--chrome-accent)}
+.vtab.on b{color:var(--chrome-soft)}
+.vtab:focus-visible{outline:2px solid var(--chrome-accent);outline-offset:-2px}
+
+/* A category row has a name and a count, not a reference above a title. */
+.frow.crow .nm{grid-row:1}
+.frow.crow .pill{grid-row:1;align-self:center}
+.list .pill.done{background:var(--chrome-accent);color:var(--chrome);border:1px solid transparent}
+.list-empty .btn.pri{background:#fff;border-color:#fff;color:var(--ink)}
+
+.ckl{max-width:860px}
+.ckl-hd h2{font-family:var(--disp);font-weight:700;font-size:24px;letter-spacing:-.02em;color:var(--ink);
+  margin:0;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.ckl-src{font-family:var(--mono);font-weight:500;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--label);border:1px solid var(--line-2);padding:2px 7px;border-radius:var(--r)}
+.ckl-sum{font-size:14.5px;color:var(--ink-2);margin:8px 0 12px}
+.ckbar{display:flex;height:8px;background:var(--line);border-radius:999px;overflow:hidden;max-width:560px}
+.ckbar i{display:block;height:100%}
+.ckbar .pass{background:var(--teal)}
+.ckbar .fail{background:var(--crim)}
+.ckbar .na{background:#8587B0}
+.ckl-act{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:16px}
+.ckl-save{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ckl-save input,.ck-note,.ck-claim input,.cb-add input,.cb-save input{
+  background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);padding:7px 10px;font-size:14px;color:var(--ink)}
+.ckl-save input:focus,.ck-note:focus,.ck-claim input:focus,.cb-add input:focus,.cb-save input:focus{
+  border-color:var(--teal);outline:2px solid var(--teal);outline-offset:-1px}
+
+.ckl-cat{margin-top:30px;padding-top:16px;border-top:2px solid var(--ink)}
+.ckl-cat h3{font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:-.02em;color:var(--ink);
+  margin:0;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.ckl-cat h3 span{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.06em;color:var(--label)}
+.ckl-sub{margin-top:16px}
+.ckl-sub h4{font-family:var(--mono);font-weight:500;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--label);margin:0 0 7px}
+
+.ck{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 18px;align-items:start;
+  background:var(--surface);border:1px solid var(--line-2);border-left:3px solid var(--line-2);
+  padding:13px 15px;margin-bottom:8px}
+.ck.pass{border-left-color:var(--teal)}
+.ck.fail{border-left-color:var(--crim)}
+.ck.na{border-left-color:#8587B0}
+.ck-t{font-size:14.5px;font-weight:600;color:var(--ink);line-height:1.35;overflow-wrap:anywhere}
+.ck-p{font-size:12.5px;color:var(--label);margin-top:4px;line-height:1.45}
+.ck-tool{font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;color:var(--muted);margin-top:6px}
+
+.ck-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden}
+.ck-seg button{border:0;border-right:1px solid var(--line-2);background:var(--surface);padding:6px 13px;
+  font-size:13px;color:var(--ink-2);cursor:pointer;white-space:nowrap}
+.ck-seg button:last-child{border-right:0}
+.ck-seg button:hover{background:var(--wash);color:var(--ink)}
+.ck-seg button:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
+.ck-seg button[aria-pressed=true]{color:#fff;font-weight:600}
+.ck-seg button.pass[aria-pressed=true]{background:var(--teal-d)}
+.ck-seg button.fail[aria-pressed=true]{background:var(--crim)}
+.ck-seg button.na[aria-pressed=true]{background:#5A5C8A}
+
+.ck-more{grid-column:1/-1;display:flex;flex-direction:column;gap:10px}
+.ck-note{width:100%}
+.ck-claim label{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px}
+.ck-claim-r{display:flex;gap:8px}
+.ck-claim-r input{flex:1;min-width:0;border-left:2px solid var(--amber)}
+.ck-find{display:flex;align-items:baseline;gap:12px;background:var(--wash);border:1px solid var(--line);padding:8px 10px;font-size:13.5px}
+.ck-find .mono{color:var(--label);font-size:11.5px;white-space:nowrap}
+.ck-find-t{flex:1;min-width:0;color:var(--ink);overflow-wrap:anywhere}
+.ck-side{display:flex;flex-direction:column;align-items:flex-end;gap:7px}
+.ck-rm{border:0;background:none;padding:0;font-size:12px;color:var(--muted);
+  cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.ck-rm:hover{color:var(--crim)}
+.ck-addnote{align-self:flex-start}
+.ck-addnote:hover{color:var(--teal-d)}
+
+/* ---- the picker ------------------------------------------------------- */
+.modal.cb{width:min(780px,100%);height:min(860px,100%)}
+.cb-top{display:flex;gap:14px;flex-wrap:wrap;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--line)}
+.cb-top .fld{flex:1 1 220px;margin:0}
+.cb-top .fld input,.cb-top .fld select{height:42px}
+.cb-tree{flex:1;min-height:0;overflow-y:auto;padding:4px 20px 22px}
+.cb-box{width:18px;height:18px;flex:none;margin:0;accent-color:var(--teal-d);cursor:pointer}
+.cb-box:disabled{cursor:not-allowed}
+.cb-grp{border-bottom:1px solid var(--line)}
+.cb-cat{display:flex;align-items:center;gap:12px;padding:13px 0}
+.cb-catbtn{flex:1;min-width:0;display:flex;align-items:center;gap:10px;background:none;border:0;padding:0;
+  text-align:left;cursor:pointer;font-family:var(--disp);font-weight:600;font-size:16px;color:var(--ink)}
+.cb-catbtn:hover{color:var(--teal-d)}
+.cb-caret{width:8px;height:8px;flex:none;border:solid var(--label);border-width:0 2px 2px 0;transform:rotate(-45deg);margin-right:2px}
+.cb-catbtn[aria-expanded=true] .cb-caret{transform:rotate(45deg);margin-top:-4px}
+.cb-n{margin-left:auto;font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.04em;color:var(--label);white-space:nowrap}
+.cb-sub{padding:2px 0 12px 30px}
+.cb-subhd{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer}
+.cb-subhd.bare{cursor:default;color:var(--ink-2);padding-left:28px}
+.cb-subhd.bare+.cb-addbtn{margin-top:0}
+.cb-check{display:flex;align-items:flex-start;gap:8px;padding-left:28px}
+.cb-check label{flex:1;min-width:0;display:flex;align-items:flex-start;gap:10px;padding:7px 0;cursor:pointer}
+.cb-check .cb-box{margin-top:2px}
+.cb-t{font-size:13.5px;color:var(--ink);line-height:1.4;overflow-wrap:anywhere}
+.cb-p{display:block;font-size:12px;color:var(--label);margin-top:2px;line-height:1.45}
+.cb-own{font-style:normal;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--teal-d);margin-left:8px;white-space:nowrap}
+.cb-addbtn{margin:4px 0 0 20px}
+.cb-add{display:flex;flex-direction:column;gap:8px;margin:8px 0 0 28px;padding:12px;background:var(--wash);border:1px solid var(--line)}
+.cb-add-b{display:flex;gap:8px;justify-content:flex-end}
+.cb-err{margin:0;padding:9px 20px;background:#FCF1F2;border-top:1px solid var(--line);color:var(--crim);font-size:13px}
+.cb-ft{flex-wrap:wrap}
+.cb-count{font-size:13px;color:var(--ink-2);white-space:nowrap}
+.cb-count b{font-family:var(--disp);font-size:16px;color:var(--ink)}
+.cb-save{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cb-save label{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);cursor:pointer}
+.cb-save input[type=text],.cb-save input:not([type]){width:190px}
+
+/* ---- the templates page ---------------------------------------------- */
+.tpl-h{font-family:var(--disp);font-weight:700;font-size:17px;color:var(--ink);margin:30px 0 12px}
+.tpl-spread{font-size:12.5px;color:var(--muted);margin:9px 0 0;line-height:1.5}
+
+@media (max-width:760px){
+  .vtabs{margin:-2px -4px 0}
+  .vtab{min-height:44px;font-size:15px}
+  .vtab b{font-size:12px}
+
+  .ckl-hd h2{font-size:22px}
+  .ckl-sum{font-size:15px}
+  .ckl-save{display:flex;width:100%}
+  .ckl-save input{flex:1 1 100%;min-height:46px;font-size:16px}
+  .ckl-save .btn{flex:1;justify-content:center}
+  .ckl-cat h3 span,.ckl-sub h4,.ckl-src{font-size:12px}
+
+  /* The three answers are the controls, so they get the full width and a
+     thumb's height. Side by side with the title they were three slivers. */
+  .ck{grid-template-columns:minmax(0,1fr);padding:14px}
+  .ck-t{font-size:16px}
+  .ck-p{font-size:13.5px}
+  .ck-tool{font-size:12px}
+  .ck-seg{display:flex}
+  .ck-seg button{flex:1;min-height:46px;font-size:15px}
+  .ck-note,.ck-claim input{min-height:46px;font-size:16px;padding:10px 12px}
+  .ck-claim label{font-size:14.5px}
+  .ck-claim-r{flex-direction:column}
+  .ck-claim-r .btn{justify-content:center}
+  .ck-find{flex-wrap:wrap}
+  .ck-find .btn{flex:1 1 100%;justify-content:center}
+  .ck-side{align-items:stretch}
+  .ck-rm{min-height:40px;font-size:13.5px;align-self:flex-start}
+
+  .cb-top{padding:12px 16px}
+  .cb-top .fld input,.cb-top .fld select{height:auto}
+  .cb-tree{padding:0 16px 20px}
+  .cb-box{width:24px;height:24px}
+  .cb-cat{padding:0;min-height:54px}
+  .cb-catbtn{min-height:54px;font-size:17px}
+  .cb-n{font-size:12px}
+  .cb-sub{padding-left:0}
+  .cb-subhd{min-height:46px;font-size:15.5px}
+  .cb-subhd.bare{padding-left:0}
+  .cb-check{padding-left:0;flex-direction:column;gap:0}
+  .cb-check label{min-height:46px;padding:10px 0;width:100%}
+  .cb-t{font-size:15px}
+  .cb-p{font-size:13.5px}
+  .cb-own{font-size:12px}
+  .cb-addbtn{margin-left:0}
+  .cb-add{margin-left:0}
+  .cb-add input,.cb-save input:not([type=checkbox]){min-height:46px;font-size:16px;padding:10px 12px;width:100%}
+  .cb-ft .cb-count{flex:1 1 100%}
+  .cb-save{flex:1 1 100%}
+  .cb-save label{min-height:44px;font-size:15px}
+  .tpl-spread{font-size:13.5px}
+}

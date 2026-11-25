@@ -7,7 +7,11 @@ import type { Audit } from './types'
  */
 
 export type SectionKey =
-  | 'cover' | 'summary' | 'contents' | 'method' | 'findings' | 'roadmap' | 'appendix'
+  | 'cover' | 'summary' | 'contents' | 'method' | 'coverage' | 'findings' | 'roadmap' | 'appendix'
+
+/** What a section may need to know beyond the audit row to say whether it
+ *  has anything to print. */
+export interface SectionContext { checks: number }
 
 export interface SectionChoice { key: SectionKey; on: boolean }
 
@@ -20,7 +24,7 @@ export const CATALOGUE: {
   /** Some sections cannot be moved or dropped without the document stopping
    *  making sense. Saying so is better than silently ignoring the choice. */
   fixed?: 'first'
-  needs?: (a: Audit) => string | null
+  needs?: (a: Audit, ctx: SectionContext) => string | null
 }[] = [
   {
     key: 'cover', name: 'Cover', pages: 1, fixed: 'first',
@@ -39,6 +43,12 @@ export const CATALOGUE: {
     what: 'What was covered, the tools the audit declared, and what it could not see. Explains the priority score when findings are scored.',
     needs: (a) => (a.scope_note || (a.sources ?? []).length ? null
       : 'This audit has no scope note and no declared sources, so the section would print almost empty.'),
+  },
+  {
+    key: 'coverage', name: 'What was checked', pages: 1,
+    what: "Every check on the audit's checklist and how it came out: passed, raised a finding, not applicable or not run. Shows the client what was looked at and came back clean.",
+    needs: (_a, ctx) => (ctx.checks ? null
+      : "This audit has no checklist, so the section is left out. Add one from the audit's Checklist tab."),
   },
   {
     key: 'findings', name: 'Findings', pages: 'per-finding',

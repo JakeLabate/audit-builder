@@ -120,7 +120,8 @@ export async function createFinding(
   ref: string,
   title: string,
   position: number,
-  defaults: Partial<Pick<Finding, 'raised' | 'collected_from' | 'collected_to'>> = {},
+  defaults: Partial<Pick<Finding,
+    'raised' | 'collected_from' | 'collected_to' | 'pillar' | 'measurements' | 'source'>> = {},
 ): Promise<FindingFull> {
   const row: Record<string, unknown> = { org_id: orgId, audit_id: auditId, ref, title, position }
   for (const [k, v] of Object.entries(defaults)) if (v) row[k] = v

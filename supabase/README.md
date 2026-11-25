@@ -1,7 +1,7 @@
 # Database
 
 The schema lives in the Supabase project `auditbuilder` (`vvekkbboqqkxnlpmxazh`).
-Nine migrations are applied, in order (the SQL for the newest lives in `supabase/migrations/`):
+The app's own migrations, in order (the SQL for the newest lives in `supabase/migrations/`):
 
 | Version | Name | What it does |
 |---|---|---|
@@ -14,6 +14,7 @@ Nine migrations are applied, in order (the SQL for the newest lives in `supabase
 | 20260912000200 | `verifier_api` | `verifier_queue` and `verifier_record`, service-role only, the verifier worker's whole database surface (see `verifier/`) |
 | 20261123000000 | `field_review` | Audit `started_on` and evidence window, finding `scope` (segments plus an optional URL list), workspace `tools` table with RLS, two logic-mode rules retired, `seed_sample` copies the new columns |
 | 20261123000100 | `sample_taxonomy` | Moves the sample audit and every seeded copy onto the universal taxonomy, the new references, tools on every measurement row and scope segments |
+| 20261125100000 | `audit_checklists` | `audit_checks` (one row per check in an audit: pass, fail or not applicable, with the finding a fail raised) and `audit_templates` (a workspace's saved checklists, as snapshots), both with RLS; `audits.checklist_name`; `private.stamp_check` records who answered a check and when |
 
 ## Pull them into this repo
 
@@ -28,7 +29,9 @@ supabase db pull            # writes supabase/migrations/*.sql
 
 ```
 orgs ─┬─ memberships ── auth.users
-      └─ brands ── audits ── findings ── examples
+      ├─ brands ── audits ─┬─ findings ── examples
+      │                    └─ audit_checks ··· findings   (a failed check points at its finding)
+      └─ audit_templates
 ```
 
 Every content table carries `org_id`, and every policy checks membership
