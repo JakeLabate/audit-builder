@@ -48,11 +48,11 @@ const { buildPrintDocument } = await import(`../${out}/export/pdf.js`)
 const { resolveColumns, withRefs } = await import(`../${out}/lib/sheetcols.js`)
 
 const html = buildPrintDocument(brand, audit, findings, 'Jake Labate, SEO Consultant', null, null)
-const first = html.indexOf('<div class="page">')
-const pages = [...html.slice(first).matchAll(/<div class="page">[\s\S]*?(?=<div class="page">|$)/g)]
+const first = html.indexOf('<div class="page"')
+const pages = [...html.slice(first).matchAll(/<div class="page"[\s\S]*?(?=<div class="page"|$)/g)]
   .map((m) => m[0])
 
-const cols = withRefs(resolveColumns(audit), findings)
+const cols = withRefs(resolveColumns(audit, findings), findings)
 fs.writeFileSync('public/sample-report.json', JSON.stringify({
   brand: brand.name, title: audit.title, kind: audit.kind,
   head: html.slice(0, first),

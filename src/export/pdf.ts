@@ -1,184 +1,379 @@
-import type { Audit, Brand, FindingFull } from '../lib/types'
-import { categoryOf } from '../lib/taxonomy'
+import type { Audit, Brand, Example, FindingFull } from '../lib/types'
+import { categoryOf, isCategoryPath } from '../lib/taxonomy'
 import { BAND_LABEL } from '../lib/score'
 import { fontHref, identityOf, reportPalette } from '../lib/brand'
 import { sectionsOf, type SectionKey } from '../lib/sections'
-import { clientFindings, depthOf, type DepthSpec } from '../lib/depth'
+import { clientFindings } from '../lib/depth'
 import { kindOf } from '../lib/kind'
+import { scopeOf } from '../lib/scope'
 
 /**
  * PDF export. The browser's own print engine does the rendering, so there is
  * no service to run and no cost. The stylesheet uses @page and mm units,
  * matching the document system the audits are designed in.
  *
- * Layout follows the "split by reader" finding page: diagnosis on the left,
- * decision rail on the right, fix across the bottom.
+ * One rule runs through the whole file: a part of the document exists only
+ * when the audit has something to put in it. A finding can carry four fields
+ * or forty, an audit can be scored or not, scheduled or not, and each of
+ * those has to come out as a finished page rather than a template with
+ * holes in it. So nothing prints a placeholder: no "--", no "not scored", no
+ * "unassigned", no empty box, no zero that only means "not filled in".
+ *
+ * The second rule is that nothing is dropped. A page that runs long spills
+ * onto a continuation page (see LAYOUT_SCRIPT) instead of being shrunk until
+ * it is unreadable or cut with a note.
  */
 
-/** Long extracts are the main reason a finding will not fit. Show the head of
- *  it and say how much was left out, rather than letting it push the fix off
- *  the page or silently clipping at the page edge. */
+/* ------------------------------------------------------------------ text */
+
+const esc = (s: unknown) =>
+  String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
+
+/** Has something a reader could see. */
+const has = (v: unknown): boolean =>
+  v != null
+  && !(typeof v === 'string' && v.trim() === '')
+  && !(Array.isArray(v) && v.length === 0)
+
+const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
+const words = (s: string | null | undefined) => cap(String(s ?? '').replace(/_/g, ' '))
+const count = (n: number, one: string, many = one + 's') => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+  'September', 'October', 'November', 'December']
+/** 2025-05-09 as May 9, 2025. Parsed by hand so a time zone cannot move it. */
+function day(d: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d ?? ''))
+  if (!m) return String(d ?? '')
+  return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`
+}
+
+/** Escaped text with its web addresses made into links. */
+function rich(text: unknown): string {
+  return esc(text).replace(/https?:\/\/[^\s<]+/g, (u) => {
+    const tail = /[.,;:)\]]+$/.exec(u)?.[0] ?? ''
+    const url = tail ? u.slice(0, -tail.length) : u
+    return `<a href="${url}">${url}</a>${tail}`
+  })
+}
+
+/** Text as paragraphs. A blank line starts a new one; a single break stays. */
+function paras(text: unknown, cls = 'body'): string[] {
+  return String(text ?? '')
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p class="${cls}">${rich(p).replace(/\n/g, '<br>')}</p>`)
+}
+
+/* ---------------------------------------------------------------- blocks */
+
+/** A labelled block that stays in one piece. */
+const blk = (label: string, inner: string, cls = '') =>
+  inner ? `<section class="blk${cls ? ' ' + cls : ''}"><div class="sect">${esc(label)}</div>${inner}</section>` : ''
+
+/**
+ * A labelled block whose items can be divided between two pages. `wrap` is
+ * the element that holds the items, written with a %s where they go; `once`
+ * is anything that belongs with the first part only.
+ */
+function splitBlk(label: string, items: string[], wrap: string, cls = '', once = ''): string {
+  if (!items.length) return once ? blk(label, once, cls) : ''
+  return `<section class="blk${cls ? ' ' + cls : ''}" data-split><div class="sect">${esc(label)}</div>` +
+    (once ? `<div data-once>${once}</div>` : '') +
+    wrap.replace('%s', items.join('')) + '</section>'
+}
+
+/** A page with a running foot. `cont` names it on any page it runs onto. */
+function pageOf(
+  o: { kind: string; label: string; cont: string; ref?: string; fid?: string },
+  inner: string, running: string, folio: number,
+): string {
+  return `<div class="page" data-kind="${o.kind}" data-cont="${esc(o.cont)}"` +
+    (o.ref ? ` data-contref="${esc(o.ref)}"` : '') + (o.fid ? ` data-fid="${esc(o.fid)}"` : '') +
+    `><div class="pg"><div class="flow">${inner}</div>` +
+    `<div class="foot"><span>${esc(o.label)}</span><span>${esc(running)}</span><span class="folio">${folio}</span></div>` +
+    `</div></div>`
+}
+
+/* --------------------------------------------------------------- finding */
+
+const SEV: Record<string, string> = { P1: 'crit', P2: 'high', P3: 'med', P4: 'med' }
+const HARM: Record<string, string> = {
+  duplicate_content: 'Duplicate content', crawl_waste: 'Crawl waste', lost_visibility: 'Lost visibility',
+  broken_experience: 'Broken experience', compliance_exposure: 'Compliance exposure',
+}
+const HORIZON: Record<string, string> = {
+  already_happening: 'Already happening', next_crawl_cycle: 'Next crawl cycle',
+  next_release: 'Next release', latent: 'Latent',
+}
+const WHO: Record<string, string> = {
+  end_users: 'People using the site', crawlers: 'Search engines and crawlers', internal_team: 'The internal team',
+}
+
+/** Where the finding happens, in words a client reads rather than a count. */
+function whereOf(f: FindingFull): string {
+  const segs = scopeOf(f.scope).segments
+  const bits = segs.map((s) => {
+    if (s.type === 'sitewide') return 'Sitewide'
+    if (s.type === 'pages') return count((s.urls ?? []).length, 'page')
+    return s.name ? `${s.name} ${s.type}` : ''
+  }).filter(Boolean)
+  if (bits.length) return bits.join(', ')
+  return (f.templates ?? []).join(', ')
+}
+
+/** The facts strip: one cell for each fact this finding actually has. */
+function facts(f: FindingFull): string {
+  const cells: string[] = []
+  const add = (k: string, v: unknown) => {
+    if (has(v)) cells.push(`<div class="fact"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`)
+  }
+  if (f.score != null) {
+    cells.push(`<div class="fact lead"><div class="k">Priority</div>
+      <div class="v">${esc(f.band ?? '')}<small>${f.score} of 100</small></div>
+      ${f.band ? `<div class="s">${esc(BAND_LABEL[f.band])}</div>` : ''}</div>`)
+  }
+  add('Effort', f.effort_days != null ? count(Number(f.effort_days), 'engineering day') : null)
+  add('Owner', f.owner)
+  add('Where', whereOf(f))
+  // A scope made only of listed pages already says how many. Printing the
+  // same number again beside it under another name is noise.
+  const segs = scopeOf(f.scope).segments
+  const listed = segs.length > 0 && segs.every((s) => s.type === 'pages')
+  add('URLs affected', f.urls_affected != null && !listed ? f.urls_affected.toLocaleString('en-US') : null)
+  add('Exposure', f.quantity_value != null
+    ? `${Number(f.quantity_value).toLocaleString('en-US')} ${f.quantity_unit ?? ''}`.trim() : null)
+  add('Metric at risk', f.metric_at_risk)
+  add('Kind of harm', f.impact_type ? HARM[f.impact_type] ?? words(f.impact_type) : null)
+  add('Who feels it', (f.affects ?? []).map((a) => WHO[a] ?? words(a)).join(', '))
+  add('When it bites', f.time_horizon ? HORIZON[f.time_horizon] ?? words(f.time_horizon) : null)
+  add('Confidence', f.confidence ? words(f.confidence) : null)
+  add('Markets', (f.markets ?? []).join(', '))
+  // "Open" is the absence of news. Only a status that says something prints.
+  add('Status', f.status && f.status !== 'open' ? words(f.status) : null)
+  add('Client decision', f.decision ? words(f.decision) : null)
+  return cells.length ? `<div class="facts" data-keep>${cells.join('')}</div>` : ''
+}
+
+/** Long extracts are the one thing that cannot be divided between pages. */
 function clampExtract(text: string, max: number): string {
   const lines = String(text ?? '').split('\n')
   if (lines.length <= max) return esc(text)
   const rest = lines.length - max
   return esc(lines.slice(0, max).join('\n')) +
-    `\n<span class="clip">${rest} more ${rest === 1 ? 'line' : 'lines'} not shown</span>`
+    `\n<span class="clip">${count(rest, 'more line')} in the full record</span>`
 }
 
-const esc = (s: unknown) =>
-  String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
-
-const SEV: Record<string, string> = { P1: 'crit', P2: 'high', P3: 'med', P4: 'med' }
-
 /**
- * A finding page is one page. Always.
- *
- * The fit pass below scales a page down until it fits, but it stops at a floor
- * rather than printing something nobody can read, and a finding carrying nine
- * measurements and three long exhibits is genuinely two pages of material. So
- * the elastic parts are budgeted here, sized so the worst case still fits at
- * the floor, and what is left out says so. The full record is in the register
- * and the API; the page is the client's summary of it.
+ * One exhibit. It shows whatever it has: a screenshot, an extract, or neither,
+ * in which case it is a reference line with its caption and its address.
  */
-/**
- * A finding page is one page. Always.
- *
- * A static budget can always be beaten by a finding carrying more than the
- * budget allowed, so the page does not guess. Everything optional is marked
- * droppable with a priority, and the fit pass below removes the heaviest
- * material until the page genuinely fits, scaling only for what is left.
- * What came out is counted and said, so nothing disappears silently. The full
- * record is in the register and the API; the page is the client's summary.
- *
- * Drop order, heaviest first: extra exhibits, then extra measurements, then
- * extra steps. The first of each always survives.
- */
+function figure(e: Example, n: number, images: Record<string, string>): string {
+  const src = e.image_path
+    ? images[e.image_path] ?? (/^https?:\/\//i.test(e.image_path) ? e.image_path : null)
+    : null
+  const body = src
+    ? `<div class="figimg"><img src="${esc(src)}" alt=""></div>`
+    : (e.kind === 'markup' || e.kind === 'response') && has(e.extract)
+      ? `<div class="code">${clampExtract(e.extract ?? '', 28)}</div>`
+      : ''
+  const meta = [
+    has(e.query) ? `Query: ${esc(e.query)}` : '',
+    has(e.surface) ? esc(e.surface) : '',
+    has(e.request) ? esc(e.request) : '',
+    has(e.selector) ? esc(e.selector) : '',
+    has(e.url) ? rich(e.url) : '',
+    e.redacted ? 'Redacted before inclusion' : '',
+  ].filter(Boolean).join(' &nbsp;·&nbsp; ')
+  const caption = has(e.caption) ? e.caption : has(e.label) ? e.label : words(e.kind)
+  return `<figure class="evfig${body ? (src ? ' img' : ' wide') : ' ref'}">${body}<figcaption class="evcap"><span class="n">${n}</span>
+    <span class="t">${esc(caption)}</span>
+    ${has(e.captured) ? `<span class="m">${esc(day(e.captured))}</span>` : ''}</figcaption>
+    ${meta ? `<div class="evmeta">${meta}</div>` : ''}</figure>`
+}
+
 function findingPage(
-  f: FindingFull, brand: Brand, audit: Audit, page: number, d: DepthSpec, sheetUrl?: string | null,
+  f: FindingFull, running: string, folio: number, images: Record<string, string>,
+  refOf: Map<string, string>, sheetUrl?: string | null,
 ): string {
-  // Everything past the depth budget is not on the page at all, so the fit
-  // pass has far less to do. What it still marks droppable is the tail of
-  // what the budget allowed, for the finding that runs long even so.
-  const keepM = Math.max(2, Math.floor(d.measurements / 2))
-  const keepE = d.exhibits > 0 ? 1 : 0
-  const keepS = Math.max(3, Math.floor(d.steps / 2))
-  const drop = (i: number, keep: number, base: number) =>
-    i < keep ? '' : ` data-p="${base + i}" data-kind="${base}"`
+  const title = has(f.title) ? f.title : 'Untitled finding'
 
-  const rows = f.measurements.slice(0, d.measurements)
-    .map(
-      (m, i) =>
-        `<tr${drop(i, keepM, 50)}><td><span>${esc(m.check)}</span></td><td class="num">${esc(m.result)}</td><td class="dt">${esc(m.tool ?? m.taken ?? '')}</td></tr>`,
-    )
-    .join('')
-  const steps = f.steps
-    .slice(0, d.steps)
-    .map((st, i) => `<li${drop(i, keepS, 10)}>${esc(st)}</li>`)
-    .join('')
-  const exhibits = f.examples
-    .slice(0, d.exhibits)
-    .map((e, i) => {
-      const body =
-        e.kind === 'markup' || e.kind === 'response'
-          ? `<div class="code">${clampExtract(e.extract ?? '', d.extractLines)}</div>`
-          : e.image_path
-            ? `<div class="imgslot" data-path="${esc(e.image_path)}"></div>`
-            : ''
-      return `<div class="evfig"${drop(i, keepE, 100)}>${body}<div class="evcap"><span class="n">${i + 1}</span>
-        <span class="t">${esc(e.caption)}</span>
-        <span class="m">${esc(e.captured ?? '')}</span></div></div>`
+  const head = `<div class="hd" data-keep>
+    ${f.band ? `<span class="tag ${SEV[f.band]}">${esc(f.band)}</span>` : ''}
+    <span class="idl">${esc(f.ref)}</span><span class="sp"></span>
+    ${has(f.raised) ? `<span class="idl">Found ${esc(day(f.raised))}</span>` : ''}</div>
+    <h1 class="ttl" data-keep>${esc(title)}</h1>`
+
+  const why = splitBlk('Why it matters', paras(f.impact_basis), '<div data-items>%s</div>')
+
+  const checks = (f.measurements ?? []).filter((m) => has(m.check) || has(m.result))
+  // The tool column exists only if some row names a tool or a date.
+  const anyTool = checks.some((m) => has(m.tool) || has(m.taken))
+  const rows = checks
+    .map((m) => {
+      const tool = [m.tool, m.taken ? day(m.taken) : ''].filter(has).join(' · ')
+      return `<tr><td class="ck">${esc(m.check)}</td><td class="rs">${esc(m.result)}</td>
+        ${anyTool ? `<td class="tool">${esc(tool)}</td>` : ''}</tr>`
     })
-    .join('')
+  // When it was gathered rides on the label, where it costs no line.
+  const window = has(f.collected_from) && has(f.collected_to)
+    ? f.collected_from === f.collected_to
+      ? `gathered ${day(f.collected_from)}`
+      : `gathered ${day(f.collected_from)} to ${day(f.collected_to)}`
+    : ''
+  const evidence = splitBlk(`The evidence${window ? `, ${window}` : ''}`, rows,
+    '<table class="ev"><tbody data-items>%s</tbody></table>')
 
-  return `<div class="page"><div class="pg">
-  <div class="hd"><span class="tag ${SEV[f.band ?? 'P4']}">${esc(f.band ?? 'Unscored')}</span>
-    <span class="idl">${esc(f.ref)}</span></div>
-  <h1 class="ttl">${esc(f.title)}</h1>
-  <div class="split">
-    <div>
-      <div class="sect">What we found</div>
-      <p class="body">${esc(f.impact_basis || f.action || '')}</p>
-      ${rows ? `<div class="sect mt">The evidence</div><table class="ev">${rows}</table>` : ''}
-      ${exhibits}
-    </div>
-    <div>
-      <div class="score"><div class="n">${f.score ?? '--'}</div>
-        <div class="l">${f.band ? `${f.band} / ${BAND_LABEL[f.band]}` : 'Not scored'}</div></div>
-      <div class="rail">
-        ${row('URLs affected', f.urls_affected)}
-        ${row('Effort', f.effort_days != null ? `${f.effort_days} dev days` : null)}
-        ${row('Owner', f.owner, true)}
-        ${row('Verify by', f.verify_by, true)}
-      </div>
-    </div>
-  </div>
-  ${steps ? `<div class="fixbar"><div class="sect nb">The fix</div><ol class="steps">${steps}</ol></div>` : ''}
-  ${sheetUrl
-    ? `<p class="record">The full record for this finding, with every measurement and exhibit,
-        is in the register: <span class="u">${esc(sheetUrl)}</span></p>`
-    : ''}
-  <p class="dropnote clip" hidden></p>
-  <div class="foot"><span>Findings</span><span>${esc(brand.name)} / ${esc(audit.title)}</span><span>${page}</span></div>
-</div></div>`
+  const behind = [
+    has(f.confidence_reason)
+      ? `<p class="note"><b>${f.confidence ? `Confidence is ${esc(f.confidence)}.` : 'On confidence.'}</b> ${rich(f.confidence_reason)}</p>` : '',
+  ].filter(Boolean).join('')
+
+  const figs = (f.examples ?? []).map((e, i) => figure(e, i + 1, images))
+  // Four or more screenshots go two to a row. Full width, six of them are
+  // three pages of pictures between the evidence and the fix.
+  const shots = (f.examples ?? []).filter((e) => e.image_path).length
+  const exhibits = splitBlk(count(figs.length, 'Exhibit'), figs,
+    `<div class="figs${shots >= 4 ? ' two' : ''}" data-items>%s</div>`)
+
+  const steps = (f.steps ?? []).filter(has)
+    .map((st, i) => `<li><span class="sn">${i + 1}</span>${rich(st)}</li>`)
+  const lead = has(f.action) ? `<p class="fixlead">${rich(f.action)}</p>` : ''
+  const fix = splitBlk('The fix', steps, '<ol class="steps" data-items>%s</ol>', 'fix', lead)
+
+  const waits = [
+    (f.depends_on ?? []).length
+      ? `<p class="note"><b>Has to follow</b> ${esc((f.depends_on ?? []).map((id) => refOf.get(id) ?? '').filter(Boolean).join(', '))}</p>` : '',
+    (f.external_blockers ?? []).length
+      ? `<p class="note"><b>Waiting on</b> ${esc((f.external_blockers ?? []).join('; '))}</p>` : '',
+  ].filter((s) => s && !/<\/b> <\/p>$/.test(s)).join('')
+
+  const proof = blk('How we will know it worked',
+    paras(f.verification_method).join('') +
+    (has(f.verification_method) && has(f.verify_by) ? `<p class="note">Check again by ${esc(day(f.verify_by))}.</p>` : ''))
+
+  // After delivery. Each line prints only if that thing has happened.
+  const since = [
+    has(f.decision_note) ? `<p class="body"><b>${f.decision ? `${words(f.decision)} by the client.` : 'From the client.'}</b> ${rich(f.decision_note)}</p>` : '',
+    has(f.implemented_on) ? `<p class="body">Reported live on ${esc(day(f.implemented_on))}.</p>` : '',
+    has(f.verified_on) ? `<p class="body">Confirmed fixed on ${esc(day(f.verified_on))}.</p>` : '',
+    has(f.closed_note) ? `<p class="body">${rich(f.closed_note)}</p>` : '',
+    has(f.outcome_value) || has(f.outcome_note)
+      ? `<p class="body"><b>Outcome${has(f.outcome_measured_on) ? `, measured ${esc(day(f.outcome_measured_on))}` : ''}.</b> ${
+        has(f.outcome_value) ? `${Number(f.outcome_value).toLocaleString('en-US')} ${esc(f.outcome_unit ?? '')}. ` : ''}${rich(f.outcome_note ?? '')}</p>` : '',
+  ].filter(Boolean).join('')
+
+  const record = sheetUrl
+    ? `<p class="record">Every field of this finding is in <a href="${esc(sheetUrl)}">the register</a>.</p>`
+    : ''
+
+  const inner = head + facts(f) + why + evidence +
+    (behind ? `<section class="blk tight">${behind}</section>` : '') +
+    exhibits + fix +
+    (waits ? `<section class="blk tight">${waits}</section>` : '') +
+    proof + blk('What has happened since', since) + record
+
+  return pageOf({ kind: 'finding', label: 'Findings', cont: title, ref: f.ref, fid: f.id }, inner, running, folio)
 }
 
-const row = (k: string, v: unknown, small = false) =>
-  v == null || v === ''
-    ? ''
-    : `<div class="row"><div class="k">${esc(k)}</div><div class="v${small ? ' s' : ''}">${esc(v)}</div></div>`
-
+/* ------------------------------------------------------------ front matter */
 
 const PILLAR_OF = (f: FindingFull) => categoryOf(f.pillar)
+const SUB_OF = (f: FindingFull) => (isCategoryPath(f.pillar) ? f.pillar.split('/')[1] : '')
 
 /** What we found: the shape of the audit before any of the detail. */
-function summaryPage(findings: FindingFull[], counts: Record<string, number>): string {
-  const effort = findings.reduce((n, f) => n + Number(f.effort_days ?? 0), 0)
-  const byPillar = new Map<string, number>()
-  for (const f of findings) byPillar.set(PILLAR_OF(f), (byPillar.get(PILLAR_OF(f)) ?? 0) + 1)
-  const top = [...findings].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 5)
+function summaryPage(findings: FindingFull[], running: string, folio: number): string {
+  const n = findings.length
+  const scored = findings.filter((f) => f.score != null)
+  const sized = findings.filter((f) => f.effort_days != null)
+  const effort = sized.reduce((t, f) => t + Number(f.effort_days), 0)
 
-  const bands = (['P1', 'P2', 'P3', 'P4'] as const).map((b) => `
-    <div class="sumband"><b>${counts[b] ?? 0}</b><span>${b}</span></div>`).join('')
+  // The headline says only what the audit knows. "0 engineering days" on an
+  // audit nobody has sized reads as a claim that the work is free.
+  const headline = count(n, 'finding') + (
+    sized.length === 0 ? ''
+      : sized.length === n ? `, ${count(effort, 'engineering day')} of work`
+        : `, ${count(effort, 'engineering day')} across the ${sized.length} sized so far`)
 
-  const pillars = [...byPillar.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([p, n]) => `<tr><td>${esc(p)}</td><td class="num">${n}</td></tr>`)
-    .join('')
+  let bands = ''
+  if (scored.length) {
+    const c: Record<string, number> = { P1: 0, P2: 0, P3: 0, P4: 0 }
+    for (const f of scored) if (f.band) c[f.band]++
+    const tiles = (['P1', 'P2', 'P3', 'P4'] as const)
+      .map((b) => `<div class="sumband"><b>${c[b]}</b><span>${b}, ${esc(BAND_LABEL[b].toLowerCase())}</span></div>`)
+    if (scored.length < n) tiles.push(`<div class="sumband"><b>${n - scored.length}</b><span>Not yet scored</span></div>`)
+    bands = `<section class="blk"><div class="sumbands">${tiles.join('')}</div></section>`
+  }
 
-  const rows = top.map((f) => `<tr>
-      <td class="dt">${esc(f.ref)}</td>
-      <td>${esc(f.title)}</td>
-      <td class="num">${f.score ?? '--'}</td>
-    </tr>`).join('')
+  // Category, with what sits under it. A bare "Experience 7" hides that four
+  // of them are one kind of problem.
+  const cats = new Map<string, Map<string, number>>()
+  for (const f of findings) {
+    const c = PILLAR_OF(f)
+    if (!cats.has(c)) cats.set(c, new Map())
+    const s = SUB_OF(f)
+    cats.get(c)!.set(s, (cats.get(c)!.get(s) ?? 0) + 1)
+  }
+  const total = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0)
+  const catRows = [...cats.entries()].sort((a, b) => total(b[1]) - total(a[1])).map(([c, subs]) => {
+    const detail = [...subs.entries()].filter(([s]) => s).sort((a, b) => b[1] - a[1])
+      .map(([s, k]) => `${esc(s)} ${k}`).join(', ')
+    return `<tr><td>${esc(c)}</td><td>${detail}</td><td class="num">${total(subs)}</td></tr>`
+  })
 
-  return `<div class="page"><div class="pg">
-    <div class="sect">What we found</div>
-    <h1 class="ttl">${findings.length} findings, ${effort} engineering days of work</h1>
-    <div class="sumbands">${bands}</div>
-    <div class="sect mt">Where they sit</div>
-    <table class="ev tbl-pillar"><tbody>${pillars}</tbody></table>
-    <div class="sect mt">Highest scoring</div>
-    <table class="ev tbl-top"><tbody>${rows}</tbody></table>
-  </div></div>`
+  const tally = (pick: (f: FindingFull) => string | null | undefined) => {
+    const m = new Map<string, { n: number; days: number }>()
+    for (const f of findings) {
+      const k = pick(f)
+      if (!has(k)) continue
+      const e = m.get(k as string) ?? { n: 0, days: 0 }
+      e.n++; e.days += Number(f.effort_days ?? 0)
+      m.set(k as string, e)
+    }
+    return [...m.entries()].sort((a, b) => b[1].n - a[1].n)
+  }
+  const owners = tally((f) => f.owner)
+  const ownerRows = owners.map(([o, e]) =>
+    `<tr><td>${esc(o)}</td><td class="num">${count(e.n, 'finding')}${e.days ? ` &nbsp;·&nbsp; ${count(e.days, 'day')}` : ''}</td></tr>`)
+  const unowned = n - owners.reduce((t, [, e]) => t + e.n, 0)
+  if (ownerRows.length && unowned) ownerRows.push(`<tr><td>No owner yet</td><td class="num">${count(unowned, 'finding')}</td></tr>`)
+  // One owner named across fourteen findings is not a picture of who owns the
+  // work. The table waits until most of it has somebody's name on it.
+  const showOwners = unowned <= n / 2
+
+  const metricRows = tally((f) => f.metric_at_risk).map(([m, e]) =>
+    `<tr><td>${esc(m)}</td><td class="num">${count(e.n, 'finding')}</td></tr>`)
+
+  const top = [...scored].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 5).map((f) =>
+    `<tr><td class="dt">${esc(f.ref)}</td><td>${esc(f.title)}</td><td class="num">${f.score}</td></tr>`)
+
+  const table = (cls: string) => `<table class="ev ${cls}"><tbody data-items>%s</tbody></table>`
+  const inner = `<div class="sect" data-keep>What we found</div><h1 class="ttl" data-keep>${esc(headline)}</h1>` +
+    bands +
+    splitBlk('Where they sit', catRows, table('tbl-cat')) +
+    splitBlk('Highest scoring', top, table('tbl-top')) +
+    splitBlk('What is at risk', metricRows, table('tbl-metric')) +
+    (showOwners ? splitBlk('Who owns the work', ownerRows, table('tbl-own')) : '')
+
+  return pageOf({ kind: 'summary', label: 'Summary', cont: 'What we found' }, inner, running, folio)
 }
 
 /** How the audit was done, and what it could not see. */
-function methodPage(audit: Audit): string {
-  const sources = (audit.sources ?? []).map((s) => `<tr>
-      <td>${esc(s.tool)}</td><td class="dt">${esc(s.window)}</td><td class="dt">${esc(s.confidence)}</td>
-    </tr>`).join('')
+function methodPage(audit: Audit, anyScored: boolean, running: string, folio: number): string {
+  const src = (audit.sources ?? []).filter((s) => has(s?.tool))
+  const withWindow = src.some((s) => has(s.window))
+  const withConf = src.some((s) => has(s.confidence))
+  const sources = src.map((s) => `<tr><td>${esc(s.tool)}</td>
+      ${withWindow ? `<td class="num">${esc(/^\d{4}-\d{2}-\d{2}$/.test(s.window ?? '') ? day(s.window) : s.window ?? '')}</td>` : ''}
+      ${withConf ? `<td class="num">${esc(words(s.confidence))}</td>` : ''}</tr>`)
+  const srcHead = withWindow || withConf
+    ? `<thead><tr><th>Source</th>${withWindow ? '<th style="text-align:right">Window</th>' : ''}${withConf ? '<th style="text-align:right">Confidence</th>' : ''}</tr></thead>`
+    : ''
 
-  return `<div class="page"><div class="pg">
-    <div class="sect">Method and scope</div>
-    <h1 class="ttl">How this was done</h1>
-    ${audit.scope_note ? `<p class="body mt">${esc(audit.scope_note)}</p>` : ''}
-    ${sources ? `<div class="sect mt">What it was built from</div>
-      <table class="ev tbl-src"><thead><tr><th>Source</th><th>Window</th><th>Confidence</th></tr></thead>
-      <tbody>${sources}</tbody></table>` : ''}
-    ${audit.gaps ? `<div class="sect mt">What it could not see</div>
-      <p class="body">${esc(audit.gaps)}</p>` : ''}
-    <div class="sect mt">How priority is worked out</div>
+  // The scoring explainer belongs in a document that has scores in it. In one
+  // that does not, it is a page of method for a number the reader never sees.
+  const priority = anyScored ? blk('How priority is worked out', `
     <p class="body">Every finding is scored the same way, so the ordering is arithmetic
       rather than opinion. Effort sits under a square root deliberately: dividing by it
       outright would make the register recommend nothing but trivia.</p>
@@ -186,74 +381,103 @@ function methodPage(audit: Audit): string {
       &divide; sqrt(effort) &times; risk factor, capped at 100</div>
     <p class="body">The band is a position inside this audit rather than a fixed number:
       P1 is the most urgent work here, not a score above some threshold. Two findings that
-      score the same always share a band. The score itself is on every page, so this audit
-      stays comparable with another.</p>
-    <table class="ev tbl-band"><thead><tr><th>Band</th><th>Share of this audit</th><th>What it means</th></tr></thead><tbody>
-      <tr><td class="dt">P1</td><td class="num">Top 15%</td><td>Do this first</td></tr>
-      <tr><td class="dt">P2</td><td class="num">Next 25%</td><td>Scheduled work</td></tr>
-      <tr><td class="dt">P3</td><td class="num">Next 30%</td><td>Do alongside</td></tr>
-      <tr><td class="dt">P4</td><td class="num">The rest</td><td>Monitor</td></tr>
-    </tbody></table>
-  </div></div>`
+      score the same always share a band.</p>
+    <table class="ev tbl-band" style="margin-top:3mm"><tbody>
+      <tr><td class="dt">P1</td><td>Top 15%</td><td>Do this first</td></tr>
+      <tr><td class="dt">P2</td><td>Next 25%</td><td>Scheduled work</td></tr>
+      <tr><td class="dt">P3</td><td>Next 30%</td><td>Do alongside</td></tr>
+      <tr><td class="dt">P4</td><td>The rest</td><td>Monitor</td></tr>
+    </tbody></table>`) : ''
+
+  const said =
+    splitBlk('What was examined', paras(audit.scope_note), '<div data-items>%s</div>') +
+    splitBlk('What it was built from', sources, `<table class="ev tbl-src">${srcHead}<tbody data-items>%s</tbody></table>`) +
+    splitBlk('What it could not see', paras(audit.gaps), '<div data-items>%s</div>') +
+    priority
+  // An audit that declared no scope, no sources and no gaps, and scored
+  // nothing, has no method to print. A heading over an empty page is worse
+  // than no page.
+  if (!said) return ''
+  const inner = `<div class="sect" data-keep>Method and scope</div><h1 class="ttl" data-keep>How this was done</h1>` + said
+
+  return pageOf({ kind: 'method', label: 'Method', cont: 'How this was done' }, inner, running, folio)
 }
 
-/** The work, grouped into waves. */
-function roadmapPage(findings: FindingFull[]): string {
-  const waves = new Map<number, FindingFull[]>()
-  for (const f of findings) {
-    const w = f.wave ?? 99
-    if (!waves.has(w)) waves.set(w, [])
-    waves.get(w)!.push(f)
+/**
+ * The work, in order. Grouped into waves when findings have been scheduled,
+ * and a plain ordered list when they have not: a roadmap with one group
+ * called "Unscheduled" and a column of blanks is not a roadmap.
+ */
+function roadmapPage(findings: FindingFull[], running: string, folio: number): string {
+  const anyWave = findings.some((f) => f.wave != null)
+  const anyOwner = findings.some((f) => has(f.owner))
+  const sized = findings.filter((f) => f.effort_days != null)
+  const total = sized.reduce((n, f) => n + Number(f.effort_days), 0)
+
+  const row = (f: FindingFull) => `<tr>
+      <td class="dt">${esc(f.ref)}</td>
+      <td class="sub">${esc(has(f.action) ? f.action : f.title)}</td>
+      ${anyOwner ? `<td class="own">${esc(f.owner ?? '')}</td>` : ''}
+      ${sized.length ? `<td class="num">${f.effort_days != null ? count(Number(f.effort_days), 'day') : ''}</td>` : ''}
+    </tr>`
+  // Fixed columns, so the references line up from one wave's table to the next.
+  const table = `<table class="ev tbl-road"><colgroup><col class="c-ref"><col>${anyOwner ? '<col class="c-own">' : ''}${
+    sized.length ? '<col class="c-eff">' : ''}</colgroup><tbody data-items>%s</tbody></table>`
+
+  let blocks: string
+  if (anyWave) {
+    const waves = new Map<number, FindingFull[]>()
+    for (const f of findings) {
+      const w = f.wave ?? 99
+      if (!waves.has(w)) waves.set(w, [])
+      waves.get(w)!.push(f)
+    }
+    blocks = [...waves.entries()].sort((a, b) => a[0] - b[0]).map(([w, items]) => {
+      const days = items.reduce((n, f) => n + Number(f.effort_days ?? 0), 0)
+      const hd = `<div class="wavehd"><span>${w === 99 ? 'Not yet scheduled' : `Wave ${w}`}</span>
+        <span class="dt">${count(items.length, 'finding')}${days ? ` &nbsp;·&nbsp; ${count(days, 'day')}` : ''}</span></div>`
+      return `<section class="blk" data-split>${hd}${table.replace('%s', items.map(row).join(''))}</section>`
+    }).join('')
+  } else {
+    blocks = `<section class="blk" data-split>${table.replace('%s', findings.map(row).join(''))}</section>`
   }
-  const total = findings.reduce((n, f) => n + Number(f.effort_days ?? 0), 0)
 
-  const blocks = [...waves.entries()].sort((a, b) => a[0] - b[0]).map(([w, items]) => {
-    const eff = items.reduce((n, f) => n + Number(f.effort_days ?? 0), 0)
-    const rows = items.map((f) => `<tr>
-        <td class="dt">${esc(f.ref)}</td>
-        <td>${esc(f.title)}</td>
-        <td class="dt">${esc(f.owner ?? 'unassigned')}</td>
-        <td class="num">${f.effort_days ?? '--'}</td>
-      </tr>`).join('')
-    return `<div class="wave">
-      <div class="wavehd"><span>${w === 99 ? 'Unscheduled' : `Wave ${w}`}</span>
-        <span class="dt">${items.length} ${items.length === 1 ? 'finding' : 'findings'}
-          &nbsp;·&nbsp; ${eff} ${eff === 1 ? 'day' : 'days'}</span></div>
-      <table class="ev tbl-wave"><tbody>${rows}</tbody></table>
-    </div>`
-  }).join('')
+  const waveCount = new Set(findings.filter((f) => f.wave != null).map((f) => f.wave)).size
+  const headline = sized.length
+    ? count(total, 'engineering day') + (anyWave ? `, in ${count(waveCount, 'wave')}` : '')
+      + (sized.length < findings.length ? `, with ${findings.length - sized.length} still to size` : '')
+    : `${count(findings.length, 'fix', 'fixes')}, in order`
 
-  return `<div class="page"><div class="pg">
-    <div class="sect">Roadmap</div>
-    <h1 class="ttl">${total} engineering days, in ${waves.size} ${waves.size === 1 ? 'wave' : 'waves'}</h1>
-    ${blocks}
-  </div></div>`
+  const inner = `<div class="sect" data-keep>${anyWave ? 'Roadmap' : 'The work'}</div>
+    <h1 class="ttl" data-keep>${esc(headline)}</h1>${blocks}`
+  return pageOf({ kind: 'roadmap', label: anyWave ? 'Roadmap' : 'The work', cont: anyWave ? 'Roadmap' : 'The work' }, inner, running, folio)
 }
 
-/** For a client who has not had one of these before. */
-function appendixPage(): string {
-  return `<div class="page"><div class="pg">
-    <div class="sect">How to read this</div>
-    <h1 class="ttl">What each part of a finding page is telling you</h1>
-    <table class="ev"><tbody>
-      <tr><td class="dt">The title</td><td>Stated as a claim, so it is something you can agree
-        or disagree with rather than a topic.</td></tr>
-      <tr><td class="dt">The evidence</td><td>Each check we ran, what it returned, and the date.
-        Every number in the document traces back to one of these rows.</td></tr>
-      <tr><td class="dt">The exhibits</td><td>The problem shown in place, so you do not have to
-        go looking for it.</td></tr>
-      <tr><td class="dt">The score</td><td>Built from severity, how much of the site is affected,
-        how strong the evidence is, how much other work it unblocks, the effort, and the risk of
-        the fix itself. Not a typed opinion.</td></tr>
-      <tr><td class="dt">Effort</td><td>Engineering days, estimated. It feeds the score, which is
-        why a cheap fix can outrank a more serious problem that takes a quarter.</td></tr>
-      <tr><td class="dt">Verify by</td><td>The date the check should be re-run. The check itself
-        was written before the fix, so it is a real test rather than one chosen to pass.</td></tr>
-    </tbody></table>
-    <p class="body mt">If a finding says something you know to be wrong, say so. The record is
-      built to be argued with, and a corrected finding is worth more than a polite one.</p>
-  </div></div>`
+/** For a client who has not had one of these before. Only the parts this
+ *  document actually has are explained. */
+function appendixPage(findings: FindingFull[], running: string, folio: number): string {
+  const some = (p: (f: FindingFull) => unknown) => findings.some((f) => has(p(f)))
+  const rows: [string, string][] = [
+    ['The title', 'Stated as a claim, so it is something you can agree or disagree with rather than a topic.'],
+  ]
+  if (some((f) => f.impact_basis)) rows.push(['Why it matters', 'What the problem costs, and where any number in it came from.'])
+  if (some((f) => f.measurements)) rows.push(['The evidence', 'Each check that was run and what it returned, with the tool it came from. Every claim in the document traces back to one of these rows.'])
+  if (some((f) => f.examples)) rows.push(['The exhibits', 'The problem shown in place, so you do not have to go looking for it.'])
+  if (some((f) => f.score)) rows.push(['Priority', 'Built from severity, how much of the site is affected, how strong the evidence is, how much other work it unblocks, the effort, and the risk of the fix itself. Not a typed opinion.'])
+  if (some((f) => f.effort_days)) rows.push(['Effort', 'Engineering days, estimated. It feeds the priority, which is why a cheap fix can outrank a more serious problem that takes a quarter.'])
+  if (some((f) => f.action) || some((f) => f.steps)) rows.push(['The fix', 'What to do, written as an instruction to the team that can do it, in steps that need no follow-up question.'])
+  if (some((f) => f.verification_method)) rows.push(['How we will know it worked', 'The check that proves the fix. It was written before the fix, so it is a real test rather than one chosen to pass.'])
+
+  const inner = `<div class="sect" data-keep>How to read this</div>
+    <h1 class="ttl" data-keep>What each part of a finding page is telling you</h1>
+    <section class="blk" data-split><table class="ev tbl-read"><tbody data-items>${
+      rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table></section>
+    <section class="blk"><p class="body">If a finding says something you know to be wrong, say so. The record is
+      built to be argued with, and a corrected finding is worth more than a polite one.</p></section>`
+  return pageOf({ kind: 'appendix', label: 'How to read this', cont: 'How to read this' }, inner, running, folio)
 }
+
+/* -------------------------------------------------------------- document */
 
 export function buildPrintDocument(
   brand: Brand,
@@ -263,16 +487,23 @@ export function buildPrintDocument(
   /** Signed URL for the brand logo. Resolved by the caller, because the
    *  bucket is private and this function is pure. */
   logoUrl?: string | null,
-  /** The register this document is the argument for. Printed on each finding
-   *  page, so "the rest is in the sheet" is a link rather than a claim. */
+  /** The register this document is the argument for. Linked from each finding,
+   *  so "the rest is in the sheet" is a link rather than a claim. */
   sheetUrl?: string | null,
+  /** Exhibit image paths mapped to addresses a browser can load. Resolved by
+   *  the caller for the same reason as the logo. */
+  images: Record<string, string> = {},
 ): string {
-  const d = depthOf(audit)
   // exposure exists so a finding can stay in the register without reaching the
-  // client. The document was printing them anyway, which made the flag a lie.
-  const ordered = clientFindings(findings).sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+  // client. Scored findings lead, highest first; the rest keep the order they
+  // were written in, which is the author's own order of importance.
+  const ordered = clientFindings(findings).sort((a, b) =>
+    ((b.score ?? -1) - (a.score ?? -1)) || ((a.position ?? 0) - (b.position ?? 0)))
+  const scored = ordered.filter((f) => f.score != null)
   const counts = { P1: 0, P2: 0, P3: 0, P4: 0 } as Record<string, number>
   for (const f of ordered) if (f.band) counts[f.band]++
+  const refOf = new Map(findings.map((f) => [f.id, f.ref]))
+  const running = `${brand.name} / ${audit.title}`
 
   const id = identityOf(brand)
   const pal = reportPalette(id)
@@ -306,222 +537,318 @@ export function buildPrintDocument(
     ? `<p class="cvcontact">Prepared for ${esc(id.contact.name)}${id.contact.role ? `, ${esc(id.contact.role)}` : ''}</p>`
     : ''
 
-  const cover = `${brandCss}<div class="page"><div class="pg cover">
+  // Four numbers at most, and every one of them a real count. On a scored
+  // audit they are the bands; on an unscored one a row of zeros would say the
+  // audit found nothing urgent, which it did not say.
+  const exhibits = ordered.reduce((n, f) => n + (f.examples ?? []).length, 0)
+  const cats = new Set(ordered.map(PILLAR_OF)).size
+  const stats: [string, string][] = [[String(ordered.length), ordered.length === 1 ? 'Finding' : 'Findings']]
+  if (scored.length) {
+    stats.push([String(counts.P1), 'P1, do first'], [String(counts.P2), 'P2, scheduled'])
+  } else {
+    if (cats > 1) stats.push([String(cats), 'Areas covered'])
+    if (exhibits) stats.push([String(exhibits), exhibits === 1 ? 'Exhibit' : 'Exhibits'])
+  }
+  if (audit.urls_crawled != null) {
+    stats.push([audit.urls_crawled.toLocaleString('en-US'), audit.urls_crawled === 1 ? 'Page reviewed' : 'URLs crawled'])
+  }
+
+  const cover = `${brandCss}<div class="page" data-kind="cover"><div class="pg cover">
     ${logo}
     <div class="chip">${esc(kindOf(audit))}</div>
     <h1 class="cvtitle">${esc(audit.title)}</h1>
     <p class="cvsub">${esc(id.legal_name ?? brand.name)}${brand.domain ? ` &nbsp;·&nbsp; ${esc(brand.domain)}` : ''}</p>
     ${id.slogan ? `<p class="cvslogan">${esc(id.slogan)}</p>` : ''}
-    <div class="cvstats">
-      <div><b>${ordered.length}</b><span>Findings</span></div>
-      <div><b>${counts.P1}</b><span>P1, do first</span></div>
-      <div><b>${counts.P2}</b><span>P2, scheduled</span></div>
-      <div><b>${audit.urls_crawled != null ? audit.urls_crawled.toLocaleString('en-US') : '--'}</b><span>URLs crawled</span></div>
-    </div>
+    <div class="cvstats">${stats.slice(0, 4).map(([n, l]) => `<div><b>${esc(n)}</b><span>${esc(l)}</span></div>`).join('')}</div>
     ${contact}
-    <div class="cvfoot"><span>${esc(byline)}</span><span>${esc(audit.delivered_on ?? new Date().toISOString().slice(0, 10))}</span></div>
+    <div class="cvfoot"><span>${esc(byline)}</span><span>${esc(day(audit.delivered_on ?? new Date().toISOString().slice(0, 10)))}</span></div>
   </div></div>`
 
-  const index = (folio: number) => `<div class="page"><div class="pg">
-    <div class="sect">Document index</div>
-    <h1 class="ttl">Findings, In Priority Order</h1>
-    <table class="idx">${ordered
-      .map(
-        (f, i) =>
-          `<tr><td class="n">${i + 1}</td><td>${esc(f.title)}</td><td class="b">${esc(f.band ?? '')}</td><td class="s">${f.score ?? ''}</td></tr>`,
-      )
-      .join('')}</table>
-    <div class="foot"><span>Front matter</span><span>${esc(brand.name)} / ${esc(audit.title)}</span><span>${folio}</span></div>
-  </div></div>`
-
-  // Page numbers used to be constants: the contents page said 2 and findings
-  // counted from 3. That was only ever right for one arrangement of sections,
-  // and the whole point of the export dialog is that you can choose them and
-  // reorder them. With the defaults on it was already wrong by two, so a
-  // client reading "page 5" in the footer was looking at the seventh sheet.
-  // The folio is now counted off the sections that are actually in the
-  // document, in the order they actually appear.
+  // Which sheet each section starts on, counted off the sections that are
+  // actually in the document, in the order they actually appear. This is the
+  // count before layout. A page that runs long adds a sheet, so the layout
+  // pass renumbers every foot and the contents once it knows the real order.
+  // A section with nothing to say is left out even when it is ticked: the
+  // pages about findings when there are none, the method page when the audit
+  // declared no method.
+  const any = ordered.length > 0
+  const methodHtml = methodPage(audit, scored.length > 0, running, 0)
   const sheets: Record<SectionKey, number> = {
-    cover: 1, summary: 1, contents: 1, method: 1,
-    findings: ordered.length, roadmap: 1, appendix: 1,
+    cover: 1, summary: any ? 1 : 0, contents: any ? 1 : 0, method: methodHtml ? 1 : 0,
+    findings: ordered.length, roadmap: any ? 1 : 0, appendix: any ? 1 : 0,
+  }
+  const chosen = sectionsOf(audit).filter((s) => s.on && sheets[s.key] > 0)
+  const startOf = {} as Record<SectionKey, number>
+  let at = 1
+  for (const s of chosen) { startOf[s.key] = at; at += sheets[s.key] ?? 1 }
+  const findingsOn = startOf.findings != null
+
+  const index = (folio: number) => {
+    const rows = ordered.map((f, i) => `<tr>
+        <td class="n">${i + 1}</td>
+        <td class="t">${esc(has(f.title) ? f.title : 'Untitled finding')}<span class="r">${esc(f.ref)}</span></td>
+        ${scored.length ? `<td class="b">${esc(f.band ?? '')}</td><td class="s">${f.score ?? ''}</td>` : ''}
+        ${findingsOn ? `<td class="p" data-pageof="${esc(f.id)}">${startOf.findings + i}</td>` : ''}
+      </tr>`)
+    const inner = `<div class="sect" data-keep>Contents</div>
+      <h1 class="ttl" data-keep>${scored.length ? 'Findings, in priority order' : 'The findings'}</h1>
+      <section class="blk" data-split><table class="idx"><thead><tr><th></th><th>Finding</th>
+        ${scored.length ? '<th class="r">Band</th><th class="r">Score</th>' : ''}${findingsOn ? '<th class="r">Page</th>' : ''}
+        </tr></thead><tbody data-items>${rows.join('')}</tbody></table></section>`
+    return pageOf({ kind: 'contents', label: 'Contents', cont: 'Contents' }, inner, running, folio)
   }
 
   const built: Record<SectionKey, (folio: number) => string> = {
     cover: () => cover,
-    summary: () => summaryPage(ordered, counts),
+    summary: (folio) => summaryPage(ordered, running, folio),
     contents: (folio) => index(folio),
-    method: () => methodPage(audit),
+    method: (folio) => methodPage(audit, scored.length > 0, running, folio),
     findings: (folio) =>
-      ordered.map((f, i) => findingPage(f, brand, audit, folio + i, d, sheetUrl)).join(''),
-    roadmap: () => roadmapPage(ordered),
-    appendix: () => appendixPage(),
+      ordered.map((f, i) => findingPage(f, running, folio + i, images, refOf, sheetUrl)).join(''),
+    roadmap: (folio) => roadmapPage(ordered, running, folio),
+    appendix: (folio) => appendixPage(ordered, running, folio),
   }
 
   // The cover carries the brand variables, so when it is switched off the
   // style block still has to lead or the rest of the document loses the kit.
-  const chosen = sectionsOf(audit).filter((s) => s.on)
-  let folio = 1
-  const body = chosen
-    .map((s) => {
-      const html = built[s.key]?.(folio) ?? ''
-      folio += sheets[s.key] ?? 1
-      return html
-    })
-    .join('')
+  const body = chosen.map((s) => built[s.key]?.(startOf[s.key]) ?? '').join('')
   return chosen[0]?.key === 'cover' ? body : `${brandCss}${body}`
 }
 
 /**
- * Fit every page onto one page.
+ * Lay the document out once it can be measured.
  *
- * A finding carries however much evidence it carries. Rather than clipping at
- * the page edge, which is what a fixed height box does silently, each page's
- * content is measured once the fonts have settled and scaled down until it
- * fits. Width is compensated as it scales, so the text gets smaller and the
- * column stays the same measure.
+ * A finding carries however much it carries. The page it starts on takes what
+ * fits; the rest moves to a page of its own, headed with the finding it
+ * continues. Tables, step lists, exhibits and long prose divide between the
+ * two pages row by row; everything else moves whole. Nothing is dropped, and
+ * nothing is shrunk past the point of a slightly tight page: if the overflow
+ * is under a tenth it is scaled to fit, since a continuation page holding two
+ * lines is worse than a page set a fraction smaller.
  *
- * There is a floor. Below it the page would be unreadable, so it stops there
- * and the overflow is allowed to show rather than pretending it fitted.
+ * It waits for images first, because an exhibit has no height until its
+ * screenshot has loaded, and a page measured before that is measured wrong.
+ * An image that fails to load is removed, so its caption still prints and
+ * there is no broken frame.
+ *
+ * Then every foot and the contents are renumbered from the real page order.
  */
-const FIT_FLOOR = 0.74
-
-export const FIT_SCRIPT = `
+export const LAYOUT_SCRIPT = `
 (function () {
-  var FLOOR = ${FIT_FLOOR};
-  var NAME = { '100': 'exhibit', '50': 'measurement', '10': 'step' };
+  var root = document.documentElement;
+  if (root.getAttribute('data-fit')) return;
+  root.setAttribute('data-fit', 'running');
+  var SOFT = 0.82, HARD = 0.62;
+  var FIG = ['80mm', '66mm', '54mm', '44mm', '36mm'];
 
-  document.querySelectorAll('.page > .pg').forEach(function (box) {
-    var fit = box.querySelector(':scope > .fit');
-    if (!fit) {
-      fit = document.createElement('div');
-      fit.className = 'fit';
-      // The running footer stays outside the wrapper. A transformed element
-      // becomes the containing block for its absolutely positioned
-      // descendants, so scaling the wrapper would drag the footer up the page
-      // with it and land it on top of the content.
-      var kids = [];
-      for (var k = 0; k < box.children.length; k++) kids.push(box.children[k]);
-      kids.forEach(function (el) { if (!el.classList.contains('foot')) fit.appendChild(el); });
-      box.insertBefore(fit, box.firstChild);
-    }
+  function availOf(box) {
     var cs = getComputedStyle(box);
-    var avail = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-    var note = fit.querySelector('.dropnote');
-
-    var reset = function () { fit.style.transform = ''; fit.style.width = '100%'; };
-    reset();
-
-    // Drop the heaviest optional material until what remains can be scaled
-    // into the page without going below the floor. Highest priority first,
-    // so extra exhibits go before extra measurements, and steps go last.
-    var cut = {};
-    for (var guard = 0; guard < 40; guard++) {
-      if (fit.scrollHeight <= avail / FLOOR) break;
-      var worst = null;
-      fit.querySelectorAll('[data-p]').forEach(function (el) {
-        if (!worst || +el.getAttribute('data-p') > +worst.getAttribute('data-p')) worst = el;
-      });
-      if (!worst) break;
-      var kind = worst.getAttribute('data-kind') || '10';
-      cut[kind] = (cut[kind] || 0) + 1;
-      worst.parentNode.removeChild(worst);
-      if (note) {
-        var bits = [];
-        Object.keys(cut).sort(function (a, b) { return b - a; }).forEach(function (k) {
-          var n = cut[k], w = NAME[k] || 'item';
-          bits.push(n + ' ' + (n === 1 ? w : w + 's'));
-        });
-        note.textContent = bits.join(', ') + ' not shown here. The full record is in the register.';
-        note.hidden = false;
-      }
-    }
-
-    // Nothing droppable left and still too tall. That means the overflow is
-    // all material the page is not allowed to remove: the title, the basis,
-    // the first four measurements, the first five steps. Shorten the prose to
-    // a line count that fits, and say so. Visible truncation beats silent
-    // clipping at the page edge, which is what this whole pass exists to stop.
-    if (fit.scrollHeight > avail / FLOOR) {
-      var clamps = [10, 8, 6, 5, 4, 3, 2];
-      fit.classList.add('clamped');
-      for (var c = 0; c < clamps.length; c++) {
-        fit.style.setProperty('--cl', clamps[c]);
-        if (fit.scrollHeight <= avail / FLOOR) break;
-      }
-      if (note) {
-        note.textContent = (note.hidden ? '' : note.textContent.replace(/\.$/, '') + '. ') +
-          'Some wording is shortened to fit. The full text is in the register.';
-        note.hidden = false;
-      }
-    }
-
-    if (fit.scrollHeight <= avail) { reset(); return; }
-
-    // Binary search the scale. Compensating the width reflows the text, which
-    // changes the height, so it cannot be solved by one division.
-    var lo = FLOOR, hi = 1, s = FLOOR;
-    for (var i = 0; i < 8; i++) {
+    return box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  }
+  function scaleTo(flow, avail, floor) {
+    var lo = floor, hi = 1, s = floor;
+    for (var i = 0; i < 9; i++) {
       var mid = (lo + hi) / 2;
-      fit.style.width = (100 / mid) + '%';
-      fit.style.transform = 'scale(' + mid + ')';
-      if (fit.scrollHeight * mid <= avail) { s = mid; lo = mid; } else { hi = mid; }
+      flow.style.width = (100 / mid) + '%';
+      flow.style.transform = 'scale(' + mid + ')';
+      if (flow.scrollHeight * mid <= avail) { s = mid; lo = mid; } else { hi = mid; }
     }
-    fit.style.width = (100 / s) + '%';
-    fit.style.transform = 'scale(' + s + ')';
-  });
-})();
-  document.documentElement.setAttribute('data-fit','done');
+    flow.style.width = (100 / s) + '%';
+    flow.style.transform = 'scale(' + s + ')';
+  }
+  function movable(el) { return !!el && !el.hasAttribute('data-keep'); }
+  function itemsOf(el) { return el.hasAttribute('data-split') ? el.querySelector('[data-items]') : null; }
 
+  function pageAfter(page) {
+    var next = page.cloneNode(false);
+    next.removeAttribute('data-fid');
+    var pg = document.createElement('div');
+    pg.className = page.querySelector('.pg').className;
+    var flow = document.createElement('div');
+    flow.className = 'flow';
+    var label = page.getAttribute('data-cont');
+    if (label) {
+      var h = document.createElement('div');
+      h.className = 'conthd';
+      h.setAttribute('data-keep', '');
+      var ref = page.getAttribute('data-contref');
+      if (ref) { var r = document.createElement('span'); r.className = 'idl'; r.textContent = ref; h.appendChild(r); }
+      var t = document.createElement('span'); t.className = 'ct'; t.textContent = label; h.appendChild(t);
+      var c = document.createElement('span'); c.className = 'cc'; c.textContent = 'Continued'; h.appendChild(c);
+      flow.appendChild(h);
+    }
+    pg.appendChild(flow);
+    var foot = page.querySelector('.foot');
+    if (foot) pg.appendChild(foot.cloneNode(true));
+    next.appendChild(pg);
+    page.parentNode.insertBefore(next, page.nextSibling);
+    return next;
+  }
+
+  function spill(page) {
+    var box = page.querySelector('.pg');
+    var flow = box && box.querySelector('.flow');
+    if (!flow) return;
+    var avail = availOf(box);
+    flow.style.transform = ''; flow.style.width = '100%';
+    if (flow.scrollHeight <= avail + 1) return;
+    // Screenshots give way first. An exhibit set a little smaller keeps a
+    // finding on one page; the same exhibit at full size would push the fix
+    // onto a page of its own.
+    if (flow.querySelector('.figimg')) {
+      for (var z = 1; z < FIG.length; z++) {
+        flow.style.setProperty('--figh', FIG[z]);
+        if (flow.scrollHeight <= avail / SOFT) break;
+      }
+      if (flow.scrollHeight > avail / SOFT) flow.style.setProperty('--figh', FIG[2]);
+    }
+    if (flow.scrollHeight <= avail + 1) return;
+    if (flow.scrollHeight <= avail / SOFT) { scaleTo(flow, avail, SOFT); return; }
+
+    var nflow = null, head = null;
+    var top = function () { return head ? head.nextSibling : nflow.firstChild; };
+    for (var g = 0; g < 800 && flow.scrollHeight > avail + 1; g++) {
+      var last = flow.lastElementChild;
+      if (!movable(last)) break;
+      var items = itemsOf(last);
+      var canSplit = !!items && items.children.length > 1;
+      // The only block left under the heading, and it cannot be divided: it
+      // stays, and is scaled below. Moving it would leave a page with nothing
+      // on it but a title.
+      if (!canSplit && !movable(last.previousElementSibling)) break;
+      if (!nflow) {
+        nflow = pageAfter(page).querySelector('.flow');
+        head = nflow.querySelector('.conthd');
+      }
+      var first = top();
+      var cont = first && first.nodeType === 1 && first.__from === last ? first : null;
+      if (canSplit) {
+        if (!cont) {
+          cont = last.cloneNode(true);
+          var ci = itemsOf(cont);
+          while (ci.firstChild) ci.removeChild(ci.firstChild);
+          var once = cont.querySelectorAll('[data-once]');
+          for (var o = 0; o < once.length; o++) once[o].parentNode.removeChild(once[o]);
+          var lab = cont.querySelector('.sect');
+          if (lab) {
+            var base = lab.getAttribute('data-base') || lab.textContent;
+            lab.setAttribute('data-base', base);
+            lab.textContent = base + ', continued';
+          }
+          cont.__from = last;
+          nflow.insertBefore(cont, first);
+        }
+        var into = itemsOf(cont);
+        into.insertBefore(items.lastElementChild, into.firstChild);
+      } else {
+        if (cont) {
+          // Its last row is going too, so the two halves become one again.
+          var back = itemsOf(cont);
+          while (back.firstChild) items.appendChild(back.firstChild);
+          nflow.removeChild(cont);
+        }
+        nflow.insertBefore(last, top());
+      }
+    }
+    if (flow.scrollHeight > avail + 1) scaleTo(flow, avail, HARD);
+  }
+
+  function layout() {
+    for (var p = document.body.firstElementChild; p; p = p.nextElementSibling) {
+      if (p.classList && p.classList.contains('page')) spill(p);
+    }
+    var pages = document.querySelectorAll('.page');
+    var at = {};
+    for (var i = 0; i < pages.length; i++) {
+      var f = pages[i].querySelector('.folio');
+      if (f) f.textContent = String(i + 1);
+      var fid = pages[i].getAttribute('data-fid');
+      if (fid) at[fid] = i + 1;
+    }
+    var cells = document.querySelectorAll('[data-pageof]');
+    for (var k = 0; k < cells.length; k++) {
+      var n = at[cells[k].getAttribute('data-pageof')];
+      if (n) cells[k].textContent = String(n);
+    }
+    root.setAttribute('data-pages', String(pages.length));
+    root.setAttribute('data-fit', 'done');
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'audit-document-pages', pages: pages.length }, '*');
+      }
+    } catch (e) {}
+  }
+
+  function dead(img) {
+    var fig = img.closest ? img.closest('.figimg') : null;
+    var gone = fig || img;
+    // Without its picture the exhibit is a reference line, and is set as one.
+    if (fig && fig.parentNode) fig.parentNode.className = 'evfig ref';
+    if (gone.parentNode) gone.parentNode.removeChild(gone);
+  }
+
+  var imgs = Array.prototype.slice.call(document.images);
+  var left = 0, started = false;
+  var go = function () { if (started) return; started = true; try { layout(); } catch (e) { root.setAttribute('data-fit', 'failed'); } };
+  imgs.forEach(function (img) {
+    if (img.complete) { if (!img.naturalWidth) dead(img); return; }
+    left++;
+    var settle = function (ev) {
+      if (ev.type === 'error') dead(img);
+      if (--left === 0) go();
+    };
+    img.addEventListener('load', settle);
+    img.addEventListener('error', settle);
+  });
+  if (!left) go(); else setTimeout(go, 15000);
+})();
 `
 
+/** Kept under its old name for anything still importing it. */
+export const FIT_SCRIPT = LAYOUT_SCRIPT
+
+const FONTS = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap'
 
 /**
  * The same document, as one self contained file.
  *
- * printDocument builds this in a popup and throws it away. A headless renderer
- * needs the identical bytes, fit pass included, so the stored PDF is the same
- * artifact the print dialog would have produced rather than a second rendering
- * that drifts from it.
+ * The print window, the headless renderer and the preview in the export
+ * dialog all load exactly this, layout pass included, so the stored PDF, the
+ * printed one and the one on screen are the same artifact rather than three
+ * renderings that drift apart.
  */
-export function buildStandaloneDocument(html: string, css: string, title: string): string {
+export function buildStandaloneDocument(html: string, css: string, title: string, extraCss = ''): string {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<style>${css}</style></head><body>${html}
+<link rel="stylesheet" href="${FONTS}">
+<style>${css}${extraCss}</style></head><body>${html}
 <script>(function(){
-  var run = function () { try { ${FIT_SCRIPT} } catch (e) {
+  var run = function () { try { ${LAYOUT_SCRIPT} } catch (e) {
     document.documentElement.setAttribute('data-fit','failed');
   } };
+  // Measure after the faces have loaded. Laying out against fallback metrics
+  // gives page breaks that are wrong for the document that actually prints.
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ setTimeout(run, 120) });
   else setTimeout(run, 600);
 })();<\/script></body></html>`
 }
 
-/** Opens a print window containing only the document, fits each page, prints. */
+/** Opens a print window containing only the document, lays it out, prints. */
 export function printDocument(html: string, css: string, title: string) {
   const w = window.open('', '_blank', 'width=900,height=1100')
   if (!w) {
     alert('Your browser blocked the print window. Allow popups for this site and try again.')
     return
   }
-  w.document.write(
-    `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>` +
-      `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">` +
-      `<style>${css}</style></head><body>${html}</body></html>`,
-  )
+  w.document.write(buildStandaloneDocument(html, css, title))
   w.document.close()
   w.focus()
-  const go = () => setTimeout(() => {
-    // Measure after the faces have loaded. Fitting against fallback metrics
-    // produces a scale that is wrong for the document that actually prints.
-    try {
-      const s = w.document.createElement('script')
-      s.textContent = FIT_SCRIPT
-      w.document.body.appendChild(s)
-    } catch {
-      /* if it cannot fit, print unfitted rather than not at all */
-    }
-    setTimeout(() => w.print(), 120)
-  }, 250)
-  if (w.document.fonts) w.document.fonts.ready.then(go)
-  else setTimeout(go, 600)
+  // Print once the layout pass says it has finished, or after a wait long
+  // enough that printing something beats printing nothing.
+  const started = Date.now()
+  const wait = () => {
+    const state = w.document.documentElement.getAttribute('data-fit')
+    if (state === 'done' || state === 'failed' || Date.now() - started > 20000) setTimeout(() => w.print(), 150)
+    else setTimeout(wait, 150)
+  }
+  wait()
 }

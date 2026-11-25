@@ -4,7 +4,7 @@ import { buildStandaloneDocument } from '../export/pdf'
 import { exportFilename, recordExport, renderPdf } from '../lib/exports'
 import { DEFAULT_KIND, KIND_SUGGESTIONS } from '../lib/kind'
 import type { Audit, Brand, FindingFull } from '../lib/types'
-import { updateAudit } from '../lib/api'
+import { evidenceUrls, updateAudit } from '../lib/api'
 import { buildPrintDocument, printDocument } from '../export/pdf'
 import { PRINT_CSS } from '../export/print.css'
 import { exportToSheets } from '../export/sheets'
@@ -60,6 +60,13 @@ export default function ExportModal({
     setPicked((p) => fn(p ?? autoColumns(findings)))
   const [kind, setKind] = useState<string>(audit.kind ?? '')
   const [doc, setDoc] = useState('')
+  // Exhibit screenshots live in a private bucket, so each needs a signed
+  // address before the preview or the renderer can load it. Null until they
+  // are back: the preview waits rather than drawing a document without them.
+  const [images, setImages] = useState<Record<string, string> | null>(null)
+  // How many pages the document really has, reported by its own layout pass.
+  // The count from the section list is only right when nothing runs long.
+  const [laidOut, setLaidOut] = useState<number | null>(null)
   const [scale, setScale] = useState(0.5)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -74,7 +81,25 @@ export default function ExportModal({
   // for you, not for them, and neither export should carry it.
   const shown = clientFindings(findings)
   const hidden = findings.length - shown.length
-  const pages = pageCount(sections, shown.length)
+  const estimate = pageCount(sections, shown.length)
+  const pages = estimate === 0 ? 0 : Math.max(laidOut ?? 0, estimate)
+
+  useEffect(() => {
+    let live = true
+    const paths = shown.flatMap((f) => f.examples.map((e) => e.image_path)).filter((p): p is string => !!p)
+    evidenceUrls(paths).then((m) => { if (live) setImages(m) }).catch(() => { if (live) setImages({}) })
+    return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findings])
+
+  useEffect(() => {
+    const heard = (e: MessageEvent) => {
+      const d = e.data as { type?: string; pages?: number } | null
+      if (d && d.type === 'audit-document-pages' && typeof d.pages === 'number') setLaidOut(d.pages)
+    }
+    window.addEventListener('message', heard)
+    return () => window.removeEventListener('message', heard)
+  }, [])
   const onCols = cols.filter((c) => c.on)
 
   useEffect(() => {
@@ -104,20 +129,20 @@ export default function ExportModal({
   }, [tab, mv])
 
   useEffect(() => {
-    if (tab !== 'document') return
+    if (tab !== 'document' || !images) return
     window.clearTimeout(draw.current)
     draw.current = window.setTimeout(() => {
       const preview = { ...audit, sections, kind: kind.trim() || null } as Audit
-      const html = buildPrintDocument(brand, preview, findings, byline, logoUrl, null)
-      setDoc(`<!doctype html><html><head><meta charset="utf-8">
-        <style>${PRINT_CSS}
-          html,body{margin:0}
-          .page{box-shadow:0 1px 4px rgba(25,26,62,.22);margin-bottom:16px}
-        </style></head><body>${html}</body></html>`)
+      const html = buildPrintDocument(brand, preview, findings, byline, logoUrl, null, images)
+      // The preview is the standalone document, layout pass and all, so a
+      // finding that runs onto a second page does so here too.
+      setLaidOut(null)
+      setDoc(buildStandaloneDocument(html, PRINT_CSS, audit.title,
+        'html,body{margin:0}.page{box-shadow:0 1px 4px rgba(25,26,62,.22);margin-bottom:16px}'))
     }, 140)
     return () => window.clearTimeout(draw.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, kind, findings, brand, logoUrl, byline, tab])
+  }, [sections, kind, findings, brand, logoUrl, byline, tab, images])
 
   useEffect(() => {
     window.clearTimeout(save.current)
@@ -156,7 +181,12 @@ export default function ExportModal({
       }
     }
 
-    const body = buildPrintDocument(brand, live, findings, byline, logoUrl, sheetUrl)
+    // Signed again at export, so the links the renderer loads are fresh even
+    // if the dialog has been open a while.
+    const shots = await evidenceUrls(
+      shown.flatMap((f) => f.examples.map((e) => e.image_path)).filter((p): p is string => !!p),
+    ).catch(() => images ?? {})
+    const body = buildPrintDocument(brand, live, findings, byline, logoUrl, sheetUrl, shots)
     const name = exportFilename(brand, live)
 
     // A rendered PDF is the only version of the document that has a URL. If
@@ -189,7 +219,7 @@ export default function ExportModal({
     setBusy(false)
     setDone({ pdf: pdf?.path ?? null, sheet: sheetUrl })
     if (sheetUrl && pdf) say('Export ready. Both links are on the audit.')
-  }, [audit, sections, cols, kind, brand, findings, byline, logoUrl, sheetsReady, say, onExported])
+  }, [audit, sections, cols, kind, brand, findings, byline, logoUrl, sheetsReady, say, onExported, images])
 
   const copy = async (k: string, url: string) => {
     try {
@@ -244,8 +274,9 @@ export default function ExportModal({
               <>
                 <div className="rs-pane-hd"><h3>What the document contains</h3></div>
                 <p className="rs-pane-sub">
-                  Every finding gets its own page, carrying the measurements behind the claim
-                  and the exhibit that shows it. Everything else is in the register.
+                  Each finding starts on its own page and shows whatever it has: why it matters,
+                  the evidence and exhibits, the fix, and how it will be verified. Parts with
+                  nothing in them are left out, and a long finding runs onto a second page.
                 </p>
 
                 <div className="rs-kind">
@@ -284,7 +315,9 @@ export default function ExportModal({
                         </label>
                         <div className="rs-body">
                           <div className="rs-name">{c.name}
-                            <span className="rs-pages">{n} {n === 1 ? 'page' : 'pages'}</span>
+                            <span className="rs-pages">{c.pages === 'per-finding'
+                              ? `${n} ${n === 1 ? 'finding' : 'findings'}`
+                              : `${n} ${n === 1 ? 'page' : 'pages'}`}</span>
                           </div>
                           <p className="rs-what">{c.what}</p>
                           {s.on && blocked && <p className="rs-warn">{blocked}</p>}
