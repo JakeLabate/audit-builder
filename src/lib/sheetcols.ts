@@ -87,7 +87,11 @@ export const SHEET_COLUMNS: SheetCol[] = [
   { key: 'leverage', header: 'Leverage', note: '1 to 5, what it unblocks.', width: 90,
     value: (f) => f.leverage ?? '' },
   { key: 'risk', header: 'Fix risk', note: 'Risk of the fix itself.', width: 110,
-    value: (f) => f.risk_factor ?? '' },
+    // The factor is always computable, because a missing input counts as the
+    // middle of its scale. A number nobody entered is not a value, so the cell
+    // stays empty until at least one of the three inputs is set.
+    value: (f) => (f.blast_radius != null || f.failure_likelihood != null || f.reversibility != null
+      ? f.risk_factor ?? '' : '') },
   { key: 'decision', header: 'Decision', note: 'The client call on the recommendation: accepted, deferred or rejected.', width: 130,
     value: (f) => title((f as unknown as { decision: string | null }).decision ?? null) },
   { key: 'verified_on', header: 'Verified on', note: 'When it was confirmed.', width: 120,
