@@ -129,6 +129,9 @@ export interface Audit {
   gaps: string | null
   urls_crawled: number | null
   delivered_on: string | null
+  /** Hold each finding to one page in the document. Off, a long finding runs
+   *  onto a second page and nothing is left out. */
+  doc_compact?: boolean
   /** The default "Found on" for every finding in this audit. */
   started_on: string | null
   /** The default evidence window for every finding in this audit. */

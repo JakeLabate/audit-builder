@@ -59,6 +59,7 @@ export default function ExportModal({
   const setCols = (fn: (p: ColChoice[]) => ColChoice[]) =>
     setPicked((p) => fn(p ?? autoColumns(findings)))
   const [kind, setKind] = useState<string>(audit.kind ?? '')
+  const [compact, setCompact] = useState<boolean>(audit.doc_compact === true)
   const [doc, setDoc] = useState('')
   // Exhibit screenshots live in a private bucket, so each needs a signed
   // address before the preview or the renderer can load it. Null until they
@@ -132,7 +133,7 @@ export default function ExportModal({
     if (tab !== 'document' || !images) return
     window.clearTimeout(draw.current)
     draw.current = window.setTimeout(() => {
-      const preview = { ...audit, sections, kind: kind.trim() || null } as Audit
+      const preview = { ...audit, sections, kind: kind.trim() || null, doc_compact: compact } as Audit
       const html = buildPrintDocument(brand, preview, findings, byline, logoUrl, null, images)
       // The preview is the standalone document, layout pass and all, so a
       // finding that runs onto a second page does so here too.
@@ -142,13 +143,13 @@ export default function ExportModal({
     }, 140)
     return () => window.clearTimeout(draw.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, kind, findings, brand, logoUrl, byline, tab, images])
+  }, [sections, kind, compact, findings, brand, logoUrl, byline, tab, images])
 
   useEffect(() => {
     window.clearTimeout(save.current)
     save.current = window.setTimeout(async () => {
       try {
-        const patch = { sections, sheet_columns: picked, kind: kind.trim() || null } as unknown as Partial<Audit>
+        const patch = { sections, sheet_columns: picked, kind: kind.trim() || null, doc_compact: compact } as unknown as Partial<Audit>
         await updateAudit(audit.id, patch)
         onChange({ ...audit, ...patch } as Audit)
         setErr(null)
@@ -158,7 +159,7 @@ export default function ExportModal({
     }, 600)
     return () => window.clearTimeout(save.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, picked, kind])
+  }, [sections, picked, kind, compact])
 
   /**
    * The register is made first so the document can point at it. If Google is
@@ -169,7 +170,7 @@ export default function ExportModal({
     setBusy(true)
     setErr(null)
     setDone(null)
-    const live = { ...audit, sections, sheet_columns: cols, kind: kind.trim() || null } as Audit
+    const live = { ...audit, sections, sheet_columns: cols, kind: kind.trim() || null, doc_compact: compact } as Audit
 
     let sheetUrl: string | null = null
     if (sheetsReady) {
@@ -219,7 +220,7 @@ export default function ExportModal({
     setBusy(false)
     setDone({ pdf: pdf?.path ?? null, sheet: sheetUrl })
     if (sheetUrl && pdf) say('Export ready. Both links are on the audit.')
-  }, [audit, sections, cols, kind, brand, findings, byline, logoUrl, sheetsReady, say, onExported, images])
+  }, [audit, sections, cols, kind, compact, brand, findings, byline, logoUrl, sheetsReady, say, onExported, images])
 
   const copy = async (k: string, url: string) => {
     try {
@@ -291,6 +292,21 @@ export default function ExportModal({
                     Printed on the cover. Not every audit is a technical one, so this is
                     yours to set. Leave it empty for {DEFAULT_KIND}.
                   </p>
+                </div>
+
+                <div className={'rs-row rs-opt' + (compact ? '' : ' off')}>
+                  <label className="rs-tick">
+                    <input type="checkbox" checked={compact} onChange={() => setCompact((v) => !v)} />
+                    <span className="rs-box" />
+                  </label>
+                  <div className="rs-body">
+                    <div className="rs-name">Compact: one page per finding</div>
+                    <p className="rs-what">
+                      Holds every finding to a single page. When one carries more than fits,
+                      the extra exhibits, measurements and steps come off and the page says how
+                      many. Off, a long finding runs onto a second page and nothing is left out.
+                    </p>
+                  </div>
                 </div>
 
                 <ol className="rs-list">
