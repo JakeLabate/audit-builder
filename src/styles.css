@@ -616,6 +616,7 @@ input, select, textarea { font-size: 16px }
 .rs-pane-hd{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .rs-pane-hd h3{font-family:var(--disp);font-weight:600;font-size:15px;color:var(--ink);margin:0}
 .rs-pane-sub{font-size:12.5px;color:var(--muted);margin:3px 0 12px}
+.linkish{border:0;background:none;padding:0;font:inherit;color:var(--teal-d);text-decoration:underline;cursor:pointer}
 
 .rs-stage{
   overflow:auto;padding:12px;background:var(--wash);

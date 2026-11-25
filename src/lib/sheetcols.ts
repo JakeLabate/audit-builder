@@ -1,6 +1,7 @@
 import type { Audit, FindingFull } from './types'
 import { describeScope, scopeOf } from './scope'
 import { BAND_LABEL } from './score'
+import { clientFindings } from './depth'
 
 /**
  * The spreadsheet's columns.
@@ -55,7 +56,6 @@ export const SHEET_COLUMNS: SheetCol[] = [
   { key: 'verify_by', header: 'Verify by', note: 'When to run that check.', width: 110,
     value: (f) => f.verify_by ?? '' },
 
-  /* Off by default. Available when the register needs to carry more. */
   { key: 'pillar', header: 'Category', note: 'The area this belongs to. It sets the reference.', width: 170,
     value: (f) => f.pillar ?? '' },
   { key: 'markets', header: 'Markets', note: 'Which locales or country sites are affected.', width: 120,
@@ -98,16 +98,39 @@ export const SHEET_COLUMNS: SheetCol[] = [
 
 export interface ColChoice { key: string; on: boolean }
 
-export const DEFAULT_COLUMNS: ColChoice[] = SHEET_COLUMNS.map((c, i) => ({
-  key: c.key, on: i < 14,
-}))
+/**
+ * The default: a column is on when at least one finding has something in it,
+ * and off when every finding leaves it empty. A register full of blank columns
+ * reads as unfinished work, and a filled column left out is a gap nobody asked
+ * for. The reference is always on.
+ *
+ * It follows the findings: fill in a field and its column appears. That holds
+ * until the columns are changed by hand on the audit, after which the stored
+ * choice wins.
+ */
+export function autoColumns(findings: FindingFull[]): ColChoice[] {
+  const shown = clientFindings(findings)
+  return withRefs(SHEET_COLUMNS, findings).map((c) => ({
+    key: c.key,
+    on: c.key === 'ref' || shown.some((f) => {
+      const v = c.value(f)
+      return v !== '' && v != null
+    }),
+  }))
+}
 
-/** What the audit stored, repaired: unknown keys dropped, new ones appended off. */
-export function columnsOf(audit: Audit | null): ColChoice[] {
-  const raw = Array.isArray((audit as unknown as { sheet_columns?: ColChoice[] })?.sheet_columns)
+/** Whether the audit carries columns somebody chose, or follows the default. */
+export function hasChosenColumns(audit: Audit | null): boolean {
+  return Array.isArray((audit as unknown as { sheet_columns?: ColChoice[] | null })?.sheet_columns)
+}
+
+/** What the audit stored, repaired: unknown keys dropped, new ones appended off.
+ *  Nothing stored means nobody has chosen, so the default applies. */
+export function columnsOf(audit: Audit | null, findings: FindingFull[]): ColChoice[] {
+  const raw = hasChosenColumns(audit)
     ? ((audit as unknown as { sheet_columns: ColChoice[] }).sheet_columns)
     : null
-  if (!raw) return [...DEFAULT_COLUMNS]
+  if (!raw) return autoColumns(findings)
   const known = new Map(SHEET_COLUMNS.map((c) => [c.key, c]))
   const kept = raw.filter((c) => c && known.has(c.key))
   const seen = new Set(kept.map((c) => c.key))
@@ -116,9 +139,9 @@ export function columnsOf(audit: Audit | null): ColChoice[] {
 
 /** The chosen columns, in order, ready to render. Never empty: a register with
  *  no columns is not a document, so the reference is always kept. */
-export function resolveColumns(audit: Audit | null): SheetCol[] {
+export function resolveColumns(audit: Audit | null, findings: FindingFull[]): SheetCol[] {
   const by = new Map(SHEET_COLUMNS.map((c) => [c.key, c]))
-  const out = columnsOf(audit).filter((c) => c.on).map((c) => by.get(c.key)!).filter(Boolean)
+  const out = columnsOf(audit, findings).filter((c) => c.on).map((c) => by.get(c.key)!).filter(Boolean)
   return out.length ? out : [by.get('ref')!]
 }
 
