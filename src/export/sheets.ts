@@ -142,9 +142,9 @@ export async function exportToSheets(
   // The register is complete, but an internal finding is still not the
   // client's to read. Same rule as the document.
   const ordered = clientFindings(findings).sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
-  // Which columns, in which order. Chosen on the audit, so two exports of the
-  // same audit carry the same register.
-  const cols: SheetCol[] = withRefs(resolveColumns(audit), findings)
+  // Which columns, in which order. Chosen on the audit, or, when nobody has
+  // chosen, every column at least one finding fills.
+  const cols: SheetCol[] = withRefs(resolveColumns(audit, findings), findings)
 
   const counts: Record<string, number> = { P1: 0, P2: 0, P3: 0, P4: 0 }
   let effort = 0

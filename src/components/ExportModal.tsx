@@ -9,7 +9,7 @@ import { buildPrintDocument, printDocument } from '../export/pdf'
 import { PRINT_CSS } from '../export/print.css'
 import { exportToSheets } from '../export/sheets'
 import { CATALOGUE, pageCount, sectionsOf, type SectionChoice } from '../lib/sections'
-import { SHEET_COLUMNS, columnsOf, withRefs, type ColChoice } from '../lib/sheetcols'
+import { SHEET_COLUMNS, autoColumns, columnsOf, hasChosenColumns, withRefs, type ColChoice } from '../lib/sheetcols'
 import { clientFindings } from '../lib/depth'
 
 /**
@@ -46,7 +46,15 @@ export default function ExportModal({
 }) {
   const [tab, setTab] = useState<Tab>('document')
   const [sections, setSections] = useState<SectionChoice[]>(() => sectionsOf(audit))
-  const [cols, setCols] = useState<ColChoice[]>(() => columnsOf(audit))
+  // Null until somebody changes a column by hand. Until then the columns
+  // follow the findings, and nothing is stored, so a field filled in later
+  // still brings its column with it.
+  const [picked, setPicked] = useState<ColChoice[] | null>(
+    () => (hasChosenColumns(audit) ? columnsOf(audit, findings) : null),
+  )
+  const cols = picked ?? autoColumns(findings)
+  const setCols = (fn: (p: ColChoice[]) => ColChoice[]) =>
+    setPicked((p) => fn(p ?? autoColumns(findings)))
   const [kind, setKind] = useState<string>(audit.kind ?? '')
   const [doc, setDoc] = useState('')
   const [scale, setScale] = useState(0.5)
@@ -109,7 +117,7 @@ export default function ExportModal({
     window.clearTimeout(save.current)
     save.current = window.setTimeout(async () => {
       try {
-        const patch = { sections, sheet_columns: cols, kind: kind.trim() || null } as unknown as Partial<Audit>
+        const patch = { sections, sheet_columns: picked, kind: kind.trim() || null } as unknown as Partial<Audit>
         await updateAudit(audit.id, patch)
         onChange({ ...audit, ...patch } as Audit)
         setErr(null)
@@ -119,7 +127,7 @@ export default function ExportModal({
     }, 600)
     return () => window.clearTimeout(save.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, cols, kind])
+  }, [sections, picked, kind])
 
   /**
    * The register is made first so the document can point at it. If Google is
@@ -286,6 +294,15 @@ export default function ExportModal({
                 <p className="rs-pane-sub">
                   The register is the complete record. Every column carries a note under its
                   header, so somebody who was not in the audit can read it without asking you.
+                </p>
+                <p className="rs-pane-sub">
+                  {picked
+                    ? <>These are columns you chose. <button type="button" className="linkish"
+                        onClick={() => setPicked(null)}>Go back to the default</button>, which
+                        ticks every column at least one finding fills.</>
+                    : <>By default a column is ticked when at least one finding has a value in
+                        it, and it keeps up as you fill fields in. Change one and your choice
+                        is kept instead.</>}
                 </p>
                 <ol className="rs-list sc-list">
                   {cols.map((c, i) => {
