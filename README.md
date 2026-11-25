@@ -11,6 +11,23 @@ counted by band, and exported to four formats without being retyped.
 
 The document is a view of the register, not the other way round.
 
+## Checklists
+
+An audit can carry a checklist: what it set out to look at. A check is not a
+finding. It is written as the healthy state and answered pass, fail or not
+applicable, and only a fail raises a finding, with its category, reference and
+first measurement filled in from the check. That is what lets an audit report
+coverage ("62 of 67 checks run") and print what came back clean.
+
+- **Library.** The universal checks live in `src/lib/checks.ts`, filed on the
+  same taxonomy as findings. A key is never renamed or reused.
+- **Presets.** A named, pre-ticked selection of the library. Technical ships.
+- **Templates.** A workspace's saved selection plus any checks it wrote, at
+  `/templates`. Stored as a snapshot and copied into each audit, so editing a
+  template never changes an audit that already used it.
+
+Checklists are optional. An audit without one behaves exactly as before.
+
 ## Stack
 
 - **Supabase** for Postgres, OAuth, row level security and evidence storage
@@ -55,8 +72,8 @@ npm run dev
 ```
 src/
   lib/       supabase client, types mirroring the schema, the score formula, data access
-  pages/     Login, Brands, BrandView, AuditView
-  components/ Chrome, FindingEditor
+  pages/     Login, Brands, BrandView, AuditView, Templates
+  components/ Chrome, FindingEditor, Checklist, ChecklistBuilder
   export/    serialize (JSON + CSV), pdf, print.css, sheets
 supabase/    schema notes and how to pull the migrations
 ```

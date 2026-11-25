@@ -4,6 +4,7 @@ import { buildStandaloneDocument } from '../export/pdf'
 import { exportFilename, recordExport, renderPdf } from '../lib/exports'
 import { DEFAULT_KIND, KIND_SUGGESTIONS } from '../lib/kind'
 import type { Audit, Brand, FindingFull } from '../lib/types'
+import type { AuditCheck } from '../lib/checks'
 import { evidenceUrls, updateAudit } from '../lib/api'
 import { buildPrintDocument, printDocument } from '../export/pdf'
 import { PRINT_CSS } from '../export/print.css'
@@ -31,11 +32,13 @@ const PAGE_H = 1123
 type Tab = 'document' | 'register'
 
 export default function ExportModal({
-  audit, brand, findings, byline, logoUrl, sheetsReady, onClose, onChange, say, onExported,
+  audit, brand, findings, checks, byline, logoUrl, sheetsReady, onClose, onChange, say, onExported,
 }: {
   audit: Audit
   brand: Brand
   findings: FindingFull[]
+  /** The audit's checklist. Empty for an audit that has none. */
+  checks: AuditCheck[]
   byline: string
   logoUrl: string | null
   sheetsReady: boolean
@@ -82,7 +85,7 @@ export default function ExportModal({
   // for you, not for them, and neither export should carry it.
   const shown = clientFindings(findings)
   const hidden = findings.length - shown.length
-  const estimate = pageCount(sections, shown.length)
+  const estimate = pageCount(sections.filter((x) => x.key !== 'coverage' || checks.length > 0), shown.length)
   const pages = estimate === 0 ? 0 : Math.max(laidOut ?? 0, estimate)
 
   useEffect(() => {
@@ -134,7 +137,7 @@ export default function ExportModal({
     window.clearTimeout(draw.current)
     draw.current = window.setTimeout(() => {
       const preview = { ...audit, sections, kind: kind.trim() || null, doc_compact: compact } as Audit
-      const html = buildPrintDocument(brand, preview, findings, byline, logoUrl, null, images)
+      const html = buildPrintDocument(brand, preview, findings, byline, logoUrl, null, images, checks)
       // The preview is the standalone document, layout pass and all, so a
       // finding that runs onto a second page does so here too.
       setLaidOut(null)
@@ -143,7 +146,7 @@ export default function ExportModal({
     }, 140)
     return () => window.clearTimeout(draw.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, kind, compact, findings, brand, logoUrl, byline, tab, images])
+  }, [sections, kind, compact, findings, checks, brand, logoUrl, byline, tab, images])
 
   useEffect(() => {
     window.clearTimeout(save.current)
@@ -187,7 +190,7 @@ export default function ExportModal({
     const shots = await evidenceUrls(
       shown.flatMap((f) => f.examples.map((e) => e.image_path)).filter((p): p is string => !!p),
     ).catch(() => images ?? {})
-    const body = buildPrintDocument(brand, live, findings, byline, logoUrl, sheetUrl, shots)
+    const body = buildPrintDocument(brand, live, findings, byline, logoUrl, sheetUrl, shots, checks)
     const name = exportFilename(brand, live)
 
     // A rendered PDF is the only version of the document that has a URL. If
@@ -220,7 +223,7 @@ export default function ExportModal({
     setBusy(false)
     setDone({ pdf: pdf?.path ?? null, sheet: sheetUrl })
     if (sheetUrl && pdf) say('Export ready. Both links are on the audit.')
-  }, [audit, sections, cols, kind, compact, brand, findings, byline, logoUrl, sheetsReady, say, onExported, images])
+  }, [audit, sections, cols, kind, compact, brand, findings, checks, byline, logoUrl, sheetsReady, say, onExported, images])
 
   const copy = async (k: string, url: string) => {
     try {
@@ -312,7 +315,7 @@ export default function ExportModal({
                 <ol className="rs-list">
                   {sections.map((s, i) => {
                     const c = secMeta(s.key)
-                    const blocked = c.needs?.(audit) ?? null
+                    const blocked = c.needs?.(audit, { checks: checks.length }) ?? null
                     const n = c.pages === 'per-finding' ? shown.length : c.pages
                     return (
                       <li key={s.key} className={'rs-row' + (s.on ? '' : ' off')}>

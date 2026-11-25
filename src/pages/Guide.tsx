@@ -126,6 +126,35 @@ export default function Guide() {
       </section>
 
       <section className="doc-s">
+        <h2>Checklists: what was looked at</h2>
+        <p className="doc-p">
+          Findings can only say what is wrong. A <b>checklist</b> says what the audit set out to
+          look at, so it can also say what came back clean. It is optional: an audit without one
+          works exactly as described above.
+        </p>
+        <p className="doc-p">
+          A check is not a finding. It is written as the healthy state, <i>Redirects resolve in
+          one hop</i>, and it has three answers: pass, fail or not applicable. Pass and not
+          applicable are the end of it. Fail asks you for the finding, stated as a claim, and
+          writes it into the register with its category, its reference and its first measurement
+          already filled in from the check. Nothing becomes a finding on its own.
+        </p>
+        <p className="doc-p">
+          Checks are filed on the same two-level categories as findings, and you pick them from
+          one tree: tick a category to take everything in it, or open it and choose. A preset is
+          that tree arriving with ticks in it. Add checks of your own anywhere, then save the
+          selection as a <Link to="/templates">template</Link> to start the next audit from. A
+          template is copied into the audit that uses it, so changing it later never rewrites an
+          audit that is already under way.
+        </p>
+        <p className="doc-p">
+          An audit with a checklist gets one more section in its document, <b>What was
+          checked</b>: every check and how it came out. A failed check names its finding there
+          only when that finding is client-facing.
+        </p>
+      </section>
+
+      <section className="doc-s">
         <h2>Exposure: what the client sees</h2>
         <p className="doc-p">
           Every finding is either <b>client</b> or <b>internal</b>. Internal findings stay in the

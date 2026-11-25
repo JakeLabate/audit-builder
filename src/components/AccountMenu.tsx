@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase'
  */
 export const PAGES = [
   { to: '/', label: 'Brands', end: true },
+  { to: '/templates', label: 'Templates' },
   { to: '/guide', label: 'How it works' },
   { to: '/api', label: 'API and MCP' },
   { to: '/team', label: 'People' },

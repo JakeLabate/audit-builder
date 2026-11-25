@@ -6,6 +6,9 @@ import {
 } from '../lib/api'
 import type { Audit, AuditMode, Brand } from '../lib/types'
 import BrandKit from '../components/BrandKit'
+import ChecklistBuilder, { type BuilderResult } from '../components/ChecklistBuilder'
+import { PRESETS, nameFor, presetRef, specsFor, type AuditTemplate } from '../lib/checks'
+import { createAuditWithChecks, createTemplate, listTemplates } from '../lib/checkdata'
 
 export default function BrandView() {
   const { brandId } = useParams()
@@ -13,6 +16,11 @@ export default function BrandView() {
   const [audits, setAudits] = useState<Audit[]>([])
   const [title, setTitle] = useState(DEFAULT_KIND)
   const [mode, setMode] = useState<AuditMode>('manual')
+  // What the new audit sets out to look at. Empty means no checklist, which
+  // is an audit exactly as it has always been.
+  const [checklist, setChecklist] = useState('')
+  const [templates, setTemplates] = useState<AuditTemplate[]>([])
+  const [building, setBuilding] = useState(false)
   const [tab, setTab] = useState<'audits' | 'kit'>('audits')
   const [err, setErr] = useState<string | null>(null)
 
@@ -22,6 +30,9 @@ export default function BrandView() {
         const all = await listBrands()
         setBrand(all.find((b) => b.id === brandId) ?? null)
         setAudits(await listAudits(brandId))
+        // Templates are optional. Not having any, or not being able to read
+        // them, never stops the page.
+        setTemplates(await listTemplates().catch(() => []))
       } catch (e) {
         setErr((e as Error).message)
       }
@@ -33,11 +44,33 @@ export default function BrandView() {
   async function add() {
     if (!brand || !title.trim()) return
     try {
-      const a = await createAudit(brand.org_id, brand.id, title.trim(), mode)
+      const specs = specsFor(checklist || null, templates)
+      const a = specs.length
+        ? await createAuditWithChecks(brand.org_id, brand.id, title.trim(), mode, nameFor(checklist, templates), specs)
+        : await createAudit(brand.org_id, brand.id, title.trim(), mode)
       setAudits((p) => [a, ...p])
+      setErr(null)
     } catch (e) {
       setErr((e as Error).message)
     }
+  }
+
+  /** The audit, from a checklist picked check by check. Errors go back to the
+   *  dialog, which is still open and is where the person is looking. */
+  async function addCustom(r: BuilderResult) {
+    if (!brand) return
+    const name = title.trim() || DEFAULT_KIND
+    let saved: AuditTemplate | null = null
+    if (r.saveAs) {
+      saved = await createTemplate(brand.org_id, r.saveAs, r.specs)
+      setTemplates((p) => [...p, saved!].sort((a, b) => a.name.localeCompare(b.name)))
+    }
+    const a = await createAuditWithChecks(
+      brand.org_id, brand.id, name, mode, saved?.name ?? r.baseName ?? 'Custom', r.specs)
+    setAudits((p) => [a, ...p])
+    if (saved) setChecklist(saved.id)
+    setBuilding(false)
+    setErr(null)
   }
 
   async function removeAudit(id: string) {
@@ -111,6 +144,32 @@ export default function BrandView() {
           <option value="manual">Manual · every field typed</option>
           <option value="logic">Logic · generated, derived and constrained</option>
         </select>
+        <select
+          value={checklist}
+          onChange={(e) => {
+            if (e.target.value === '__build') setBuilding(true)
+            else setChecklist(e.target.value)
+          }}
+          style={{ padding: '7px 10px', border: '1px solid var(--line-2)' }}
+          aria-label="Checklist"
+        >
+          <option value="">No checklist</option>
+          <optgroup label="Presets">
+            {PRESETS.map((p) => (
+              <option key={p.id} value={presetRef(p.id)}>{p.name} checklist · {p.keys.length} checks</option>
+            ))}
+          </optgroup>
+          {templates.length > 0 && (
+            <optgroup label="Your templates">
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>{t.name} · {t.checks.length} checks</option>
+              ))}
+            </optgroup>
+          )}
+          <optgroup label="Or">
+            <option value="__build">Pick the checks yourself</option>
+          </optgroup>
+        </select>
         <button className="btn pri" onClick={add}>New audit</button>
         <span className="grow" />
         <button className="btn danger" onClick={removeBrand}>Delete brand</button>
@@ -132,6 +191,7 @@ export default function BrandView() {
                 </h3>
                 <div className="meta">
                   {a.status} &nbsp;·&nbsp; {new Date(a.created_at).toLocaleDateString()}
+                  {a.checklist_name && <> &nbsp;·&nbsp; {a.checklist_name} checklist</>}
                 </div>
                 {a.is_sample && (
                   <p className="samplenote">
@@ -149,6 +209,16 @@ export default function BrandView() {
         </div>
       )}
       </>)}
+
+      {building && (
+        <ChecklistBuilder
+          mode="audit"
+          templates={templates}
+          base={checklist || presetRef(PRESETS[0].id)}
+          onClose={() => setBuilding(false)}
+          onDone={addCustom}
+        />
+      )}
     </div>
   )
 }

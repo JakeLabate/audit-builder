@@ -9,6 +9,7 @@ import AuditView from './pages/AuditView'
 import ApiPage from './pages/ApiPage'
 import Guide from './pages/Guide'
 import Team from './pages/Team'
+import Templates from './pages/Templates'
 import Join from './pages/Join'
 import Account from './pages/Account'
 import Legal from './pages/Legal'
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="/" element={<Brands />} />
         <Route path="/brand/:brandId" element={<BrandView />} />
         <Route path="/audit/:auditId" element={<AuditView />} />
+        <Route path="/templates" element={<Templates />} />
         <Route path="/guide" element={<Guide />} />
         <Route path="/api" element={<ApiPage />} />
         <Route path="/team" element={<Team />} />
