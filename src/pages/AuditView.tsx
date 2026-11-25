@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import Deliverables from '../components/Deliverables'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Deliverables, { DeliverablesRail } from '../components/Deliverables'
+import { listExports, type ExportRow } from '../lib/exports'
 import { Link, useParams } from 'react-router-dom'
 import {
   evidenceUrl, createFinding, getAudit, listBrands, listFindings, nextRef, updateAudit, updateFindings, withBands,
@@ -42,6 +43,15 @@ export default function AuditView() {
   const [q, setQ] = useState('')
   const [toast, setToast] = useState<{ msg: string; url?: string } | null>(null)
   const [exported, setExported] = useState(0)
+  // What this audit has exported. Read here, not in the panel, because the
+  // rail shows the count whether the panel is open or not.
+  const [exportRows, setExportRows] = useState<ExportRow[] | null>(null)
+  const [exportErr, setExportErr] = useState<string | null>(null)
+  const [dlvOpen, setDlvOpen] = useState(false)
+  // Wide enough for the rail on the right. Below this the same panel is a
+  // third tab in the list, so it is rendered in one place or the other.
+  const wide = useWide()
+  const dlvInList = dlvOpen && !wide
   // Resolved once when the dialog opens, so the preview and the printed
   // file are built from the same inputs.
   const [ex, setEx] = useState<{ byline: string; logoUrl: string | null } | null>(null)
@@ -115,11 +125,34 @@ export default function AuditView() {
 
   const current = findings.find((f) => f.id === sel) ?? null
 
+  const loadExports = useCallback(async () => {
+    if (!auditId) return
+    try {
+      setExportRows(await listExports(auditId))
+      setExportErr(null)
+    } catch (e) {
+      setExportErr(`The exports could not be read. ${(e as Error).message}`)
+    }
+  }, [auditId])
+  useEffect(() => { void loadExports() }, [loadExports, exported])
+
+  // Escape closes the panel, unless a dialog is open on top of it: that one
+  // gets the key first.
+  useEffect(() => {
+    if (!dlvOpen || ex || builder) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDlvOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [dlvOpen, ex, builder])
+
   const cov = useMemo(() => coverage(checks), [checks])
   const checkGroups = useMemo(() => groupByPath(checks), [checks])
 
   const switchView = (v: 'findings' | 'checks') => {
     setView(v)
+    // On a narrow screen Deliverables is one of these tabs, so picking
+    // another leaves it. On a wide one it is its own panel and stays put.
+    if (!wide) setDlvOpen(false)
     setMview('list')
     if (phone()) window.scrollTo(0, 0)
   }
@@ -297,20 +330,26 @@ export default function AuditView() {
         )
       })()}
 
-      <div className={`split m-${mview}`}>
+      <div className={`split has-rail m-${mview}${dlvOpen ? ' dlv-open' : ''}`}>
         <div className="list">
           <div className="listbar">
             <div className="vtabs" role="tablist" aria-label="Audit views">
-              <button role="tab" aria-selected={view === 'findings'} className={'vtab' + (view === 'findings' ? ' on' : '')}
+              <button role="tab" aria-selected={!dlvInList && view === 'findings'}
+                className={'vtab' + (!dlvInList && view === 'findings' ? ' on' : '')}
                 onClick={() => switchView('findings')}>
                 Findings <b>{findings.length}</b>
               </button>
-              <button role="tab" aria-selected={view === 'checks'} className={'vtab' + (view === 'checks' ? ' on' : '')}
+              <button role="tab" aria-selected={!dlvInList && view === 'checks'}
+                className={'vtab' + (!dlvInList && view === 'checks' ? ' on' : '')}
                 onClick={() => switchView('checks')}>
                 Checklist {cov.total > 0 && <b>{cov.checked}/{cov.total}</b>}
               </button>
+              <button role="tab" aria-selected={dlvInList} className={'vtab narrow' + (dlvInList ? ' on' : '')}
+                onClick={() => { setDlvOpen(true); setMview('list'); if (phone()) window.scrollTo(0, 0) }}>
+                Deliverables {!!exportRows?.length && <b>{exportRows.length}</b>}
+              </button>
             </div>
-            {view === 'findings' && (
+            {!dlvInList && view === 'findings' && (
               <>
                 <input placeholder="Filter findings" value={q} onChange={(e) => setQ(e.target.value)} />
                 <button className="btn sm pri" onClick={add}>New</button>
@@ -318,7 +357,12 @@ export default function AuditView() {
             )}
           </div>
 
-          {view === 'checks' && (cov.total === 0 ? (
+          {dlvInList && (
+            <Deliverables rows={exportRows} error={exportErr} onChanged={loadExports}
+              onClose={() => setDlvOpen(false)} onExport={openExport} />
+          )}
+
+          {!dlvInList && view === 'checks' && (cov.total === 0 ? (
             <div className="list-empty">
               No checklist on this audit. It is optional.
               <div style={{ marginTop: 12 }}>
@@ -355,7 +399,7 @@ export default function AuditView() {
             </>
           ))}
 
-          {view === 'findings' && (<>
+          {!dlvInList && view === 'findings' && (<>
           {audit.status === 'delivered' && stageCounts.length > 0 && (
             <div className="stagesum">
               {stageCounts.map(([s, n]) => (
@@ -438,9 +482,19 @@ export default function AuditView() {
             </div>
           )}
         </div>
-      </div>
 
-      {audit && <Deliverables auditId={audit.id} reload={exported} />}
+        {/* Wide screens: a rail down the right edge, the full height of the
+            workspace, and the panel it opens beside it. Narrow ones have no
+            room for a rail, so the same panel is a third tab in the list. */}
+        <DeliverablesRail count={exportRows?.length ?? null} open={dlvOpen}
+          onToggle={() => setDlvOpen((v) => !v)} />
+        {dlvOpen && wide && (
+          <aside className="dlv-side">
+            <Deliverables rows={exportRows} error={exportErr} onChanged={loadExports}
+              onClose={() => setDlvOpen(false)} onExport={openExport} />
+          </aside>
+        )}
+      </div>
 
       {ex && brand && (
         <ExportModal
@@ -483,6 +537,20 @@ export default function AuditView() {
         onFindings={(ids, patch) => setFindings((p) => withBands(p.map((x) => (ids.includes(x.id) ? { ...x, ...patch } : x))))} />
     </>
   )
+}
+
+/** True while the window is wide enough for the audit's side rail. */
+function useWide(): boolean {
+  const query = '(min-width:961px)'
+  const [wide, setWide] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const m = window.matchMedia(query)
+    const on = () => setWide(m.matches)
+    on()
+    m.addEventListener('change', on)
+    return () => m.removeEventListener('change', on)
+  }, [])
+  return wide
 }
 
 /** Audit-level fields the document needs but the finding list does not show. */
