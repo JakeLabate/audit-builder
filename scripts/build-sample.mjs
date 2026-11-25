@@ -48,7 +48,7 @@ const { buildPrintDocument } = await import(`../${out}/export/pdf.js`)
 const { resolveColumns, withRefs } = await import(`../${out}/lib/sheetcols.js`)
 
 const html = buildPrintDocument(brand, audit, findings, 'Jake Labate, SEO Consultant', null, null)
-const first = html.indexOf('<div class="page">')
+const first = html.indexOf('<div class="page"')
 const pages = [...html.slice(first).matchAll(/<div class="page"[\s\S]*?(?=<div class="page"|$)/g)]
   .map((m) => m[0])
 
