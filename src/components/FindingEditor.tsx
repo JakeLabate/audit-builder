@@ -722,11 +722,19 @@ function G({
   purpose: string
   children: React.ReactNode
 }) {
+  // On a phone the seven groups run to dozens of screens end to end, so each
+  // one folds to its heading and the set reads as a table of contents. The
+  // fold only applies under the phone breakpoint: a desktop ignores `shut`.
+  // Identity starts open because it is where a new finding begins.
+  const [shut, setShut] = useState(name !== 'Identity')
   return (
-    <section className="grp">
-      <div className="grp-l">
+    <section className={'grp' + (shut ? ' shut' : '')}>
+      <div className="grp-l" onClick={() => setShut((v) => !v)}>
         <h4>{name}</h4>
         <p className="purpose">{purpose}</p>
+        <button type="button" className="grp-tog" aria-expanded={!shut}
+          aria-label={`${shut ? 'Open' : 'Close'} ${name}`}
+          onClick={(e) => { e.stopPropagation(); setShut((v) => !v) }} />
       </div>
       <div className="grp-b">{children}</div>
     </section>

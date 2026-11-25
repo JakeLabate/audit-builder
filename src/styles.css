@@ -1184,3 +1184,249 @@ input, select, textarea { font-size: 16px }
 /* The hidden checkbox inside a chip is absolutely placed; without a
    positioned chip it escaped to the page and stretched it by 1,400px. */
 .lchip{position:relative}
+
+/* Crumbs outside the ink bar sit on a light page. The round-two rules made
+   every crumb light for the bar, which left the brand page's trail white on
+   white. */
+.wrap .crumbs,.wrap .crumbs a{color:var(--muted)}
+.wrap .crumbs a:hover{color:var(--teal-d)}
+.wrap .crumbs b{color:var(--ink)}
+
+/* Audit settings: a floating panel on a desktop, a sheet on a phone. */
+.am{position:fixed;right:18px;bottom:18px;z-index:30}
+.am-panel{background:var(--surface);border:1px solid var(--line);padding:16px;width:330px;margin-bottom:8px;
+  box-shadow:0 14px 40px rgba(25,26,62,.18);max-height:70vh;overflow:auto}
+.am-hd{display:flex;align-items:center;justify-content:space-between;margin:-4px 0 12px}
+.am-hd b{font-family:var(--disp);font-size:17px;color:var(--ink)}
+
+/* Things that only exist on a phone. */
+.m-only,.am-hd.m-only,.mnav,.grp-tog{display:none}
+
+/* ======================================================================
+   Phones, second pass.
+
+   The first pass stopped the page sliding sideways. This one is about
+   whether the thing can be used with a thumb: one job per screen, controls
+   a finger can hit, no text squeezed into a column narrower than a word.
+
+   Keyed off width, not pointer type. Pointer detection is unreliable across
+   mobile browsers, and a control that is too small at 390px is too small
+   whatever is pointing at it.
+   ====================================================================== */
+@media (max-width:760px){
+  .m-only{display:inline-flex}
+  .am-hd.m-only{display:flex}
+
+  /* Nothing may be wider than the screen. Long URLs and code break instead. */
+  /* clip, not hidden: hidden would turn the root into its own scroller and
+     break the sticky bars and the page scroll. */
+  #root{overflow-x:clip}
+  .doc code,.doc-p,.rs-what,.hint,.lf-how,.frow .nm,.ttl,.card h3{overflow-wrap:anywhere}
+
+  /* ---- controls a thumb can hit ---- */
+  .btn{min-height:44px;padding:10px 16px;font-size:15px}
+  .btn.sm{min-height:40px;padding:8px 14px;font-size:14px}
+  .fld input,.fld select,.fld textarea,.listbar input,.keymint input,.keymint select,
+  .keytab select,.rs-kind input,.check .ch input,.check .ch select,
+  .mrow>input,.mrow>select,.seg select,.seg textarea,.seg input,.tooladd input,.tooladd select{
+    min-height:46px;padding:10px 12px;font-size:16px;width:100%}
+  .fld input[type=file]{padding:9px 10px;font-size:14px}
+  .fld textarea{min-height:96px}
+  .acct-btn{min-height:44px}
+  .acct-item{min-height:46px;display:flex;align-items:center;font-size:15px}
+  .fb-btn{width:44px;height:44px}
+  .tab{min-height:44px}
+  .chip{padding:6px 6px 6px 11px;font-size:14px}
+  .chip button{min-width:32px;min-height:32px}
+  .stg-chip{min-height:38px;padding:4px 11px;font-size:13px}
+  .dlv-a-open,.dlv-a-copy{min-height:40px;display:inline-flex;align-items:center;padding:0 14px;font-size:13.5px}
+  .dlv-x{width:40px;height:40px;font-size:22px}
+  .toast{left:12px;right:12px;bottom:12px;transform:none;max-width:none}
+
+  /* ---- type: nothing a person has to read under 12px ---- */
+  body{font-size:15.5px}
+  .sub,.doc-p{font-size:15px}
+  .fld label,.lf-l{font-size:15px}
+  .fld .hint,.lf-n,.lf-how,.rs-what,.sc-row .rs-what,.samplenote,.rs-pane-sub{font-size:13.5px;line-height:1.5}
+  .frow .nm{font-size:15.5px;line-height:1.35}
+  .frow .nm span{font-size:12.5px;margin-top:5px}
+  .card .meta,.frow .ref,.pill,.fld.required label::after,.keytab th,.snip-l,.doc-h3,
+  .dlv-when span,.stg,.stagestrip .stg,.bandgrid span,.bandgrid em,.scorebox .terms .k,.scorebox .l,
+  .idline,.issue b,.lastcheck>b,.modetag,.rep .kind,.rs-pages,.saving,.titlecount,.rolechip,
+  .acct-who span,.or,.dlv-by,.dlv-a-n,.xgot span,.xdone-hd span,.rp-hint,.fb-count,.doc-none,
+  .ex-tabs .tab span,.fld .opt{font-size:12px !important}
+  .issue{font-size:14.5px}
+
+  /* ---- header bars ---- */
+  .top.crumbbar{gap:8px;padding:0 10px 0 14px}
+  .top .crumbs a:first-of-type,.top .crumbs span:first-of-type{display:none}
+  .wrap .crumbs a:first-of-type,.wrap .crumbs span:first-of-type{display:inline}
+  .top .crumbs b{max-width:none;flex:1;min-width:0}
+  .top .crumbs{flex:1}
+  .top.crumbbar .grow,.top.crumbbar .modetag{display:none}
+  /* The brand link is the way up a level; the title is where you are. With
+     both squeezed into half a bar neither could be read, so the brand goes. */
+  .top.crumbbar .crumbs a,.top.crumbbar .crumbs span{display:none}
+  .top.crumbbar .crumbs a:nth-of-type(2){display:inline-flex;align-items:center;max-width:30vw}
+  .top.crumbbar .crumbs a:nth-of-type(2)::after{content:"/";margin:0 6px;color:var(--chrome-edge)}
+  .top.crumbbar .btn.sm{min-height:36px;padding:6px 12px;flex:none}
+
+  /* ---- the audit: list, then one finding ---- */
+  .split.m-list>.pane{display:none}
+  .split.m-detail>.list{display:none}
+  .list{max-height:none;overflow:visible;border-bottom:0;min-height:calc(100vh - 98px)}
+  .listbar{top:98px;padding:10px 12px;gap:10px}
+  .listbar input{min-height:44px}
+  .frow{padding:15px 14px}
+  .frow[aria-selected=true]{background:transparent;box-shadow:none}
+  .frow .pill{align-self:center}
+  /* The exports belong to the audit, not to one finding. */
+  .split.m-detail~.dlv{display:none}
+  .dlv{margin:0;padding:18px 14px 90px;border-left:0;border-right:0}
+
+  .mnav{display:flex;align-items:center;gap:8px;position:sticky;top:98px;z-index:18;
+    height:48px;padding:0 8px 0 4px;background:var(--surface);border-bottom:1px solid var(--line-2)}
+  .mnav-back{display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 10px;border:0;background:none;
+    font:inherit;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer}
+  .mnav-back span{font-size:24px;line-height:1;margin-top:-3px;color:var(--teal-d)}
+  .mnav-n{flex:1;text-align:right;font-family:var(--mono);font-size:12px;color:var(--muted);padding-right:4px}
+  .mnav-step{width:44px;height:40px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface);
+    font-size:24px;line-height:1;color:var(--ink);cursor:pointer;padding:0 0 4px}
+  .mnav-step:disabled{opacity:.3}
+
+  .pane{padding:18px 14px 96px}
+  .ttl{font-size:22px;line-height:1.2}
+  .idline{margin-bottom:16px;line-height:1.6}
+  .stagestrip{margin:0 0 20px}
+  .stagestrip .stg{padding:6px 10px}
+  .scorebox{margin-bottom:22px}
+  .scorebox .big{padding:14px 16px}
+  .scorebox .n{font-size:34px}
+  .scorebox .terms>div{padding:12px 16px}
+  .scorebox .terms .v{font-size:16px}
+
+  /* Audit settings: a button in the bar opens a sheet from the bottom. */
+  .am{position:static}
+  .am-fab{display:none}
+  .am-panel{position:fixed;left:0;right:0;bottom:0;z-index:70;width:auto;margin:0;max-height:82vh;
+    padding:16px 16px 28px;border:0;border-top:2px solid var(--ink);
+    box-shadow:0 -14px 40px rgba(25,26,62,.28)}
+
+  /* ---- field groups fold to their headings ---- */
+  .grp,.lgrp{display:block;padding:0;gap:0;border-top:2px solid var(--ink)}
+  .grp-l,.lgrp-l{position:relative;max-width:none;display:grid;grid-template-columns:auto minmax(0,1fr) 44px;
+    column-gap:12px;align-items:center;padding:14px 0;cursor:pointer}
+  .grp-l::before,.lgrp-l::before{grid-row:1/span 2;margin:0;font-size:26px;align-self:start;padding-top:2px}
+  .grp-l h4,.lgrp-l h3{grid-column:2;margin:0;font-size:18px}
+  .grp-l .purpose{grid-column:2;font-size:13.5px;margin-top:3px}
+  .grp-tog{display:block;grid-column:3;grid-row:1/span 2;width:44px;height:44px;border:1px solid var(--line-2);
+    border-radius:var(--r);background:var(--surface);cursor:pointer;position:relative}
+  .grp-tog::after{content:"";position:absolute;left:50%;top:50%;width:9px;height:9px;margin:-7px 0 0 -5px;
+    border:solid var(--ink);border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .grp-tog[aria-expanded=true]::after{transform:rotate(-135deg);margin-top:-2px}
+  .lgrp-l{grid-template-columns:auto minmax(0,1fr);cursor:default}
+  .grp.shut>.grp-b{display:none}
+  .grp.shut .grp-l .purpose{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;overflow:hidden}
+  .grp-b{padding:16px 14px 4px;margin-bottom:18px}
+  .lgrp .lgrid{padding:14px;margin-bottom:18px;grid-template-columns:minmax(0,1fr)}
+  .fld{margin-bottom:18px}
+  .lbar{top:98px}
+
+  /* A scope segment: what kind on one line, which one under it. */
+  .seg{display:grid;grid-template-columns:minmax(0,1fr) 46px;gap:8px;margin-bottom:12px}
+  .seg>select:first-child{grid-column:1;grid-row:1}
+  .seg>.btn{grid-column:2;grid-row:1;padding:0;justify-content:center}
+  .seg>*:not(:first-child):not(.btn){grid-column:1/-1;grid-row:2}
+  .seg>.seg-note:first-child{grid-column:1;grid-row:1}
+  .seg-add{flex-wrap:wrap}
+  .seg-add input{flex:1 1 100%}
+
+  /* A measurement is three answers. Side by side they were three slivers;
+     stacked without a border they ran into the next one. */
+  .mrow{grid-template-columns:minmax(0,1fr) 46px;gap:8px;padding:12px;margin-bottom:10px;
+    border:1px solid var(--line);border-radius:var(--r);background:var(--bg)}
+  .mrow>input:first-child{grid-column:1;grid-row:1}
+  .mrow>.btn{grid-column:2;grid-row:1;padding:0;justify-content:center}
+  .mrow>select,.mrow>input:nth-of-type(2),.mrow>.tooladd{grid-column:1/-1}
+
+  .rep{padding:14px 12px}
+  .rep .rh{margin-bottom:14px}
+
+  /* ---- export: the whole screen, one half at a time ---- */
+  .modal-back{padding:0;align-items:stretch}
+  .modal:not(.cascade){width:100%;height:100%;max-height:100dvh;border:0;border-radius:0}
+  .modal-hd{display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:center;gap:0 8px;padding:10px 8px 0 16px}
+  .modal-hd>div:first-child{min-width:0}
+  .modal-hd h2{font-size:19px}
+  .modal-hd p{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .modal-x{grid-column:2;grid-row:1;width:44px;height:44px;font-size:30px;margin:0;align-self:center}
+  .ex-tabs{grid-column:1/-1;grid-row:2;margin:8px 0 0 -16px;width:calc(100% + 24px);gap:0;align-self:auto}
+  .ex-tabs .tab{flex:1;justify-content:center;padding:10px 6px;font-size:15px;min-height:48px}
+
+  .modal-bd{display:block;overflow:hidden;position:relative}
+  .modal-bd>.rs-pane,.modal-bd>.rs-stage{height:100%;max-height:none;border:0}
+  .modal-bd.mv-options>.rs-stage{display:none}
+  .modal-bd.mv-preview>.rs-pane{display:none}
+  .rs-pane{padding:16px 16px 24px}
+  .rs-pane-hd h3{font-size:17px}
+  .rs-kind input{font-size:16px}
+
+  /* A row is a tick, what it is, and two arrows. The tick and the arrows are
+     the controls, so they get the room; the arrows move to the right edge
+     where a thumb already is. */
+  .rs-row,.sc-list .sc-row{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 8px;align-items:start;padding:12px 0}
+  .rs-tick{grid-column:1;grid-row:1;width:44px;height:44px;padding:0;display:flex;align-items:center;justify-content:center}
+  .rs-box{width:26px;height:26px}
+  .rs-tick input:checked + .rs-box::after{left:9px;top:4px;width:6px;height:12px}
+  .rs-body{grid-column:2;grid-row:1;padding-top:10px}
+  .rs-name,.sc-row .rs-name{font-size:15.5px}
+  .rs-move{grid-column:3;grid-row:1;flex-direction:row;gap:6px;padding:2px 0 0}
+  .rs-arrow{width:40px;height:40px;font-size:17px}
+
+  .rs-stage{padding:12px}
+  .sc-stage{padding:0}
+  .sc-wrap{padding:12px;height:100%}
+
+  .xdone{padding:12px 16px;max-height:38vh;overflow:auto}
+  .xdone-hd{flex-direction:column;gap:2px;margin-bottom:8px}
+  .xgot{padding:8px 10px}
+  .modal-ft{padding:10px 12px;gap:8px}
+  .modal-ft .grow{display:none}
+  .modal-ft .btn{flex:1;justify-content:center;padding:10px 8px}
+
+  .modal.cascade{width:calc(100% - 24px);margin:auto;padding:16px 14px}
+  .cascade-row{grid-template-columns:auto minmax(0,1fr);min-height:44px}
+  .cascade-row .when{grid-column:2}
+  .cascade-b .btn{flex:1;justify-content:center}
+
+  /* ---- everything else ---- */
+  .cards{grid-template-columns:minmax(0,1fr)}
+  .card{padding:16px}
+  .card .row2{gap:10px}
+  .card .row2 .btn{flex:1;justify-content:center}
+  .bar{gap:10px}
+  .bar>input,.bar>select{flex:1 1 100%;min-height:46px;font-size:16px;padding:10px 12px}
+  .bar>.btn{flex:1;justify-content:center}
+  .bar>.grow{display:none}
+  .tabs .tab{flex:1;justify-content:center;text-align:center}
+  .keymint{align-items:stretch}
+  .keymint>*{flex:1 1 100%}
+  .keymint .btn{justify-content:center}
+  .keymint .keyscope{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px 0 0;font-size:15px}
+  .keymint input[type=checkbox]{width:24px;height:24px;min-height:0;padding:0;flex:none}
+  .snip .btn{align-self:stretch;justify-content:center}
+
+  /* A four column table does not fit, and scrolling a table sideways to find
+     the Remove button is how the wrong person gets removed. Each row is a
+     card instead. */
+  .keytab-wrap{overflow:visible}
+  .keytab{min-width:0;display:block}
+  .keytab thead{display:none}
+  .keytab tbody{display:block}
+  .keytab tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;
+    padding:14px 0;border-bottom:1px solid var(--line)}
+  .keytab td{display:block;padding:0;border:0;min-width:0;overflow-wrap:anywhere}
+  .keytab td:empty{display:none}
+  .keytab td:nth-child(3){grid-column:1}
+  .keytab td:last-child{grid-column:2;grid-row:2}
+}
