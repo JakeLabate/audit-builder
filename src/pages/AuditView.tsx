@@ -31,6 +31,7 @@ export default function AuditView() {
   const { auditId } = useParams()
   const [audit, setAudit] = useState<Audit | null>(null)
   const [brand, setBrand] = useState<Brand | null>(null)
+  const [brands, setBrands] = useState<Brand[]>([])
   const [findings, setFindings] = useState<FindingFull[]>([])
   // The checklist is optional, and so is everything that reads it: an audit
   // without one behaves exactly as it did before checklists existed.
@@ -64,8 +65,9 @@ export default function AuditView() {
       const a = await getAudit(auditId)
       setAudit(a)
       if (a) {
-        const brands = await listBrands()
-        setBrand(brands.find((b) => b.id === a.brand_id) ?? null)
+        const all = await listBrands()
+        setBrands(all)
+        setBrand(all.find((b) => b.id === a.brand_id) ?? null)
         const fs = await listFindings(auditId)
         setFindings(fs)
         setSel(fs[0]?.id ?? null)
@@ -292,8 +294,8 @@ export default function AuditView() {
     <>
       <div className="top crumbbar">
         <div className="crumbs">
-          <Link to="/">Brands</Link><span>/</span>
-          <Link to={`/brand/${brand.id}`}>{brand.name}</Link><span>/</span>
+          <Link to="/audits">Audits</Link><span>/</span>
+          <Link to={`/audits?brand=${brand.id}`}>{brand.name}</Link><span>/</span>
           <b>{audit.title}</b>
           <span className={'modetag ' + audit.mode}>
             {audit.mode === 'logic' ? 'Logic' : 'Manual'}
@@ -533,6 +535,8 @@ export default function AuditView() {
       )}
       <AuditMeta audit={audit} findings={findings} onChange={setAudit}
         open={metaOpen} setOpen={setMetaOpen}
+        brands={brands.filter((b) => b.org_id === audit.org_id)}
+        onBrand={(b) => { setBrand(b); setAudit({ ...audit, brand_id: b.id }) }}
         cycleDays={registryOf(brand).crawl_cycle_days}
         onFindings={(ids, patch) => setFindings((p) => withBands(p.map((x) => (ids.includes(x.id) ? { ...x, ...patch } : x))))} />
     </>
@@ -555,9 +559,11 @@ function useWide(): boolean {
 
 /** Audit-level fields the document needs but the finding list does not show. */
 function AuditMeta({
-  audit, findings, onChange, onFindings, cycleDays, open, setOpen,
+  audit, findings, onChange, onFindings, cycleDays, open, setOpen, brands, onBrand,
 }: {
   open: boolean
+  brands: Brand[]
+  onBrand: (b: Brand) => void
   setOpen: (fn: (v: boolean) => boolean) => void
   audit: Audit
   findings: FindingFull[]
@@ -622,6 +628,24 @@ function AuditMeta({
             <input value={audit.title}
               onChange={(e) => onChange({ ...audit, title: e.target.value })}
               onBlur={() => updateAudit(audit.id, { title: audit.title })} />
+          </div>
+          <div className="fld">
+            <label>Brand</label>
+            <select value={audit.brand_id}
+              onChange={async (e) => {
+                const next = brands.find((b) => b.id === e.target.value)
+                if (!next || next.id === audit.brand_id) return
+                if (!confirm(`Move this audit to ${next.name}? Its report will be drawn with ${next.name}'s brand kit and registry.`)) return
+                try {
+                  await updateAudit(audit.id, { brand_id: next.id })
+                  onBrand(next)
+                } catch (err) {
+                  alert((err as Error).message)
+                }
+              }}>
+              {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+            <div className="hint">Which brand this audit is for. Moving it keeps every finding.</div>
           </div>
           <div className="two">
             <div className="fld">

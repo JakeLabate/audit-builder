@@ -12,13 +12,19 @@ import { supabase } from '../lib/supabase'
  * for navigation and one for the account, would be two things to find on the
  * screen that needs them least.
  */
-export const PAGES = [
-  { to: '/', label: 'Brands', end: true },
+export const PAGES: { to: string; label: string; also?: string }[] = [
+  { to: '/brands', label: 'Brands' },
+  // An audit's own page is under the Audits tab too.
+  { to: '/audits', label: 'Audits', also: '/audit/' },
   { to: '/templates', label: 'Templates' },
   { to: '/guide', label: 'How it works' },
   { to: '/mcp', label: 'MCP' },
   { to: '/team', label: 'People' },
 ]
+
+/** Whether a page's tab is the current one. */
+export const onPage = (p: (typeof PAGES)[number], isActive: boolean, path: string) =>
+  isActive || Boolean(p.also && path.startsWith(p.also))
 
 export default function AccountMenu({ session }: { session: Session }) {
   const meta = session.user.user_metadata as { avatar_url?: string; full_name?: string }
@@ -84,8 +90,8 @@ export default function AccountMenu({ session }: { session: Session }) {
           {/* Only on a phone, where the inline nav is hidden. */}
           <div className="acct-pages">
             {PAGES.map((p) => (
-              <NavLink key={p.to} to={p.to} end={p.end} role="menuitem"
-                className={({ isActive }) => 'acct-item' + (isActive ? ' on' : '')}>
+              <NavLink key={p.to} to={p.to} role="menuitem"
+                className={({ isActive }) => 'acct-item' + (onPage(p, isActive, loc.pathname) ? ' on' : '')}>
                 {p.label}
               </NavLink>
             ))}

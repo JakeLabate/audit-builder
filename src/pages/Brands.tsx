@@ -44,8 +44,8 @@ export default function Brands() {
     <div className="wrap">
       <h1 className="page">Brands</h1>
       <p className="sub">
-        Every audit belongs to a brand. Findings live under an audit, so this is where a new
-        engagement starts.
+        A brand is a client: its domain, its brand kit and the registry its findings draw on.
+        Audits are kept on the <Link to="/audits">Audits</Link> tab.
       </p>
 
       {err && (
@@ -62,16 +62,7 @@ export default function Brands() {
       </div>
 
       {adding && (
-        <form
-          onSubmit={add}
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--line)',
-            padding: 18,
-            marginBottom: 22,
-            maxWidth: 620,
-          }}
-        >
+        <form className="newform" onSubmit={add}>
           <div className="two">
             <div className="fld">
               <label>Brand name</label>
@@ -95,12 +86,12 @@ export default function Brands() {
       {brands.length === 0 && !adding ? (
         <div className="empty">
           <b>No brands yet</b>
-          <span>Add the first client you audit for and the rest follows from there.</span>
+          <span>Add the first client you audit for, then start an audit for it on the Audits tab.</span>
         </div>
       ) : (
         <div className="cards">
           {brands.map((b) => (
-            <Link className="card" key={b.id} to={`/brand/${b.id}`}>
+            <Link className="card" key={b.id} to={`/brands/${b.id}`}>
               <h3>{b.name}</h3>
               <div className="meta">{b.domain ?? 'No domain set'}</div>
               <div className="row2">

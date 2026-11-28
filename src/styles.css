@@ -85,6 +85,14 @@ h1.page{font-family:var(--disp);font-weight:700;font-size:26px;letter-spacing:-.
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.sm{padding:4px 9px;font-size:12.5px}
 .bar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:20px}
+.bar .ctl{padding:7px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface);color:var(--ink);font:inherit;font-size:13.5px}
+.bar .ctl:focus{outline:none;border-color:var(--teal)}
+.bar input.ctl{min-width:200px}
+.newform{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:22px;max-width:620px}
+.card .card-brand{font-size:13.5px;color:var(--ink-2);margin:2px 0 4px}
+.brand-audits{display:flex;gap:10px;align-items:center;flex-wrap:wrap;max-width:620px;margin:14px 0 30px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);font-size:13.5px;color:var(--muted)}
+.brand-audits b{font-family:var(--disp);font-weight:600;color:var(--ink)}
+h2.brand-h{font-family:var(--disp);font-weight:600;font-size:18px;letter-spacing:-.015em;color:var(--ink);margin:0 0 14px}
 
 /* cards */
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
@@ -983,6 +991,8 @@ input, select, textarea { font-size: 16px }
   .stg-chip{min-height:36px}
   .fld input,.fld select,.fld textarea,.listbar input,
   .keymint input,.keymint select,.keytab select,.rs-kind input{min-height:44px}
+  /* 16px keeps iOS from zooming the page when a filter is tapped. */
+  .bar .ctl{min-height:44px;font-size:16px}
   .topnav-l{min-height:40px;display:inline-flex;align-items:center}
   .acct-btn{min-height:44px}
   .acct-item{min-height:44px;display:flex;align-items:center}

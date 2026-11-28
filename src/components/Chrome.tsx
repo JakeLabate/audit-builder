@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { Link, NavLink } from 'react-router-dom'
-import AccountMenu, { PAGES } from './AccountMenu'
+import { Link, NavLink, useLocation } from 'react-router-dom'
+import AccountMenu, { PAGES, onPage } from './AccountMenu'
 
 export default function Chrome({ session, children }: { session: Session; children: ReactNode }) {
+  const { pathname } = useLocation()
   return (
     <>
       <header className="top">
@@ -13,9 +14,9 @@ export default function Chrome({ session, children }: { session: Session; childr
         {/* Below 760px these move into the account menu, which is the only
             thing on the header with room for them. */}
         <nav className="topnav">
-          {PAGES.filter((p) => p.to !== '/').map((p) => (
+          {PAGES.map((p) => (
             <NavLink key={p.to} to={p.to}
-              className={({ isActive }) => 'topnav-l' + (isActive ? ' on' : '')}>
+              className={({ isActive }) => 'topnav-l' + (onPage(p, isActive, pathname) ? ' on' : '')}>
               {p.label}
             </NavLink>
           ))}

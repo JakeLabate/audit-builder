@@ -81,7 +81,7 @@ the full flow are in `api/README.md`.
 ```
 src/
   lib/       supabase client, types mirroring the schema, the score formula, data access
-  pages/     Login, Brands, BrandView, AuditView, Templates, McpPage (MCP, then the REST API), OAuthConsent
+  pages/     Login, Brands, BrandView, Audits, AuditView, Templates, McpPage (MCP, then the REST API), OAuthConsent
   components/ Chrome, FindingEditor, Checklist, ChecklistBuilder
   export/    serialize (JSON + CSV), pdf, print.css, sheets
 supabase/    schema notes and how to pull the migrations
