@@ -190,6 +190,13 @@ export default function Guide() {
           the least important material is dropped and the page says so rather than silently
           truncating.
         </p>
+        <p className="doc-p">
+          How the two look is a <Link to="/designs">design</Link>. There are five for the document
+          and three for the register, and every one of them carries the same audit and is drawn
+          from the brand kit. Pick one for the workspace, a different one for a brand on its
+          page, or a different one for a single audit in the export dialog. The most specific
+          choice wins.
+        </p>
 
         <h3 className="doc-h3">The document</h3>
         <p className="doc-p">

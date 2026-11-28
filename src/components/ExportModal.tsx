@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { LINK_DAYS, documentLink } from '../lib/exports'
 import { buildStandaloneDocument } from '../export/pdf'
 import { exportFilename, recordExport, renderPdf } from '../lib/exports'
 import { DEFAULT_KIND, KIND_SUGGESTIONS } from '../lib/kind'
-import type { Audit, Brand, FindingFull } from '../lib/types'
+import type { Audit, Brand, FindingFull, Org } from '../lib/types'
 import type { AuditCheck } from '../lib/checks'
 import { evidenceUrls, updateAudit } from '../lib/api'
 import { buildPrintDocument, printDocument } from '../export/pdf'
@@ -12,6 +12,11 @@ import { exportToSheets } from '../export/sheets'
 import { CATALOGUE, pageCount, sectionsOf, type SectionChoice } from '../lib/sections'
 import { SHEET_COLUMNS, autoColumns, columnsOf, hasChosenColumns, withRefs, type ColChoice } from '../lib/sheetcols'
 import { clientFindings } from '../lib/depth'
+import {
+  LEVEL_NAME, PDF_DESIGNS, SHEET_DESIGNS, designOf, pdfDesign, resolveDesign, sheetDesign, withDesign,
+  type ExportDesign, type PdfDesignKey, type SheetDesignKey,
+} from '../lib/designs'
+import { sheetPreviewVars, sheetTheme } from '../lib/sheettheme'
 
 /**
  * One export, two halves.
@@ -24,6 +29,11 @@ import { clientFindings } from '../lib/depth'
  * The document preview is the document itself, in an iframe, on the same
  * stylesheet the PDF prints from. The register preview imitates the grid,
  * because the real sheet only exists once Google has made it.
+ *
+ * Each half has a design. It comes from the workspace, or from the brand if
+ * the brand has its own, and this dialog is where one audit can depart from
+ * both. Choosing "follow" here stores nothing, so the audit keeps up with
+ * whatever the brand or the workspace later changes to.
  */
 
 const PAGE_W = 794
@@ -32,10 +42,13 @@ const PAGE_H = 1123
 type Tab = 'document' | 'register'
 
 export default function ExportModal({
-  audit, brand, findings, checks, byline, logoUrl, sheetsReady, onClose, onChange, say, onExported,
+  audit, brand, org, findings, checks, byline, logoUrl, sheetsReady, onClose, onChange, say, onExported,
 }: {
   audit: Audit
   brand: Brand
+  /** The audit's workspace, for the design it falls back to. Null if it could
+   *  not be read, in which case the built-in design stands in for it. */
+  org: Org | null
   findings: FindingFull[]
   /** The audit's checklist. Empty for an audit that has none. */
   checks: AuditCheck[]
@@ -63,6 +76,12 @@ export default function ExportModal({
     setPicked((p) => fn(p ?? autoColumns(findings)))
   const [kind, setKind] = useState<string>(audit.kind ?? '')
   const [compact, setCompact] = useState<boolean>(audit.doc_compact === true)
+  // What this audit chose for itself. Either half may be missing, which means
+  // that half follows the brand, then the workspace.
+  const [own, setOwn] = useState<ExportDesign>(() => designOf(audit.export_design))
+  const above = resolveDesign({ brand, workspace: org })
+  const using = resolveDesign({ audit: { export_design: own }, brand, workspace: org })
+  const theme = sheetTheme(brand, using.sheet.key)
   const [doc, setDoc] = useState('')
   // Exhibit screenshots live in a private bucket, so each needs a signed
   // address before the preview or the renderer can load it. Null until they
@@ -80,6 +99,7 @@ export default function ExportModal({
   const save = useRef<number | undefined>(undefined)
   const draw = useRef<number | undefined>(undefined)
   const stage = useRef<HTMLDivElement>(null)
+  const frame = useRef<HTMLIFrameElement>(null)
 
   // What the client actually receives. An internal finding is in the register
   // for you, not for them, and neither export should carry it.
@@ -98,6 +118,10 @@ export default function ExportModal({
 
   useEffect(() => {
     const heard = (e: MessageEvent) => {
+      // Only the preview in this dialog. Any other document on the page, a
+      // design thumbnail for one, runs the same layout pass and reports its
+      // own page count, which is not this document's.
+      if (e.source !== frame.current?.contentWindow) return
       const d = e.data as { type?: string; pages?: number } | null
       if (d && d.type === 'audit-document-pages' && typeof d.pages === 'number') setLaidOut(d.pages)
     }
@@ -137,7 +161,7 @@ export default function ExportModal({
     window.clearTimeout(draw.current)
     draw.current = window.setTimeout(() => {
       const preview = { ...audit, sections, kind: kind.trim() || null, doc_compact: compact } as Audit
-      const html = buildPrintDocument(brand, preview, findings, byline, logoUrl, null, images, checks)
+      const html = buildPrintDocument(brand, preview, findings, byline, logoUrl, null, images, checks, using.pdf.key)
       // The preview is the standalone document, layout pass and all, so a
       // finding that runs onto a second page does so here too.
       setLaidOut(null)
@@ -146,13 +170,15 @@ export default function ExportModal({
     }, 140)
     return () => window.clearTimeout(draw.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, kind, compact, findings, checks, brand, logoUrl, byline, tab, images])
+  }, [sections, kind, compact, findings, checks, brand, logoUrl, byline, tab, images, using.pdf.key])
 
   useEffect(() => {
     window.clearTimeout(save.current)
     save.current = window.setTimeout(async () => {
       try {
-        const patch = { sections, sheet_columns: picked, kind: kind.trim() || null, doc_compact: compact } as unknown as Partial<Audit>
+        const patch = {
+          sections, sheet_columns: picked, kind: kind.trim() || null, doc_compact: compact, export_design: own,
+        } as unknown as Partial<Audit>
         await updateAudit(audit.id, patch)
         onChange({ ...audit, ...patch } as Audit)
         setErr(null)
@@ -162,7 +188,7 @@ export default function ExportModal({
     }, 600)
     return () => window.clearTimeout(save.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, picked, kind, compact])
+  }, [sections, picked, kind, compact, own])
 
   /**
    * The register is made first so the document can point at it. If Google is
@@ -173,13 +199,15 @@ export default function ExportModal({
     setBusy(true)
     setErr(null)
     setDone(null)
-    const live = { ...audit, sections, sheet_columns: cols, kind: kind.trim() || null, doc_compact: compact } as Audit
+    const live = {
+      ...audit, sections, sheet_columns: cols, kind: kind.trim() || null, doc_compact: compact, export_design: own,
+    } as Audit
 
     let sheetUrl: string | null = null
     if (sheetsReady) {
       setStep('Building the register in your Drive')
       try {
-        sheetUrl = await exportToSheets(brand, live, findings, byline)
+        sheetUrl = await exportToSheets(brand, live, findings, byline, using.sheet.key)
       } catch (e) {
         setErr(`The register could not be created, so the document has no link to it. ${(e as Error).message}`)
       }
@@ -190,7 +218,7 @@ export default function ExportModal({
     const shots = await evidenceUrls(
       shown.flatMap((f) => f.examples.map((e) => e.image_path)).filter((p): p is string => !!p),
     ).catch(() => images ?? {})
-    const body = buildPrintDocument(brand, live, findings, byline, logoUrl, sheetUrl, shots, checks)
+    const body = buildPrintDocument(brand, live, findings, byline, logoUrl, sheetUrl, shots, checks, using.pdf.key)
     const name = exportFilename(brand, live)
 
     // A rendered PDF is the only version of the document that has a URL. If
@@ -212,6 +240,8 @@ export default function ExportModal({
           audit: live, brand, sheet_url: sheetUrl,
           pdf_path: pdf?.path ?? null, pdf_url: null,
           finding_count: clientFindings(findings).length,
+          // Only the halves that were actually produced.
+          design: { ...(pdf ? { pdf: using.pdf.key } : {}), ...(sheetUrl ? { sheet: using.sheet.key } : {}) },
         })
         onExported()
       } catch (e) {
@@ -223,7 +253,7 @@ export default function ExportModal({
     setBusy(false)
     setDone({ pdf: pdf?.path ?? null, sheet: sheetUrl })
     if (sheetUrl && pdf) say('Export ready. Both links are on the audit.')
-  }, [audit, sections, cols, kind, compact, brand, findings, checks, byline, logoUrl, sheetsReady, say, onExported, images])
+  }, [audit, sections, cols, kind, compact, own, using.pdf.key, using.sheet.key, brand, findings, checks, byline, logoUrl, sheetsReady, say, onExported, images])
 
   const copy = async (k: string, url: string) => {
     try {
@@ -282,6 +312,22 @@ export default function ExportModal({
                   the evidence and exhibits, the fix, and how it will be verified. Parts with
                   nothing in them are left out, and a long finding runs onto a second page.
                 </p>
+
+                <div className="rs-kind rs-design">
+                  <label htmlFor="doc-design">Design</label>
+                  <select id="doc-design" value={own.pdf ?? ''}
+                    onChange={(e) => setOwn((p) => withDesign(p, 'pdf', (e.target.value || null) as PdfDesignKey | null))}>
+                    <option value="">Follow {LEVEL_NAME[above.pdf.from]} ({pdfDesign(above.pdf.key).name})</option>
+                    {PDF_DESIGNS.map((d) => <option key={d.key} value={d.key}>{d.name}</option>)}
+                  </select>
+                  <p className="hint">
+                    {pdfDesign(using.pdf.key).what}{' '}
+                    {own.pdf
+                      ? 'Set for this audit only.'
+                      : `This audit follows ${LEVEL_NAME[above.pdf.from]}, so it changes if that does.`}{' '}
+                    Same pages and same fields in every design.
+                  </p>
+                </div>
 
                 <div className="rs-kind">
                   <label htmlFor="doc-kind">What to call this document</label>
@@ -348,6 +394,22 @@ export default function ExportModal({
               </>
             ) : (
               <>
+                <div className="rs-kind rs-design">
+                  <label htmlFor="sheet-design">Design</label>
+                  <select id="sheet-design" value={own.sheet ?? ''}
+                    onChange={(e) => setOwn((p) => withDesign(p, 'sheet', (e.target.value || null) as SheetDesignKey | null))}>
+                    <option value="">Follow {LEVEL_NAME[above.sheet.from]} ({sheetDesign(above.sheet.key).name})</option>
+                    {SHEET_DESIGNS.map((d) => <option key={d.key} value={d.key}>{d.name}</option>)}
+                  </select>
+                  <p className="hint">
+                    {sheetDesign(using.sheet.key).what}{' '}
+                    {own.sheet
+                      ? 'Set for this audit only.'
+                      : `This audit follows ${LEVEL_NAME[above.sheet.from]}, so it changes if that does.`}{' '}
+                    Same tabs and same columns in every design.
+                  </p>
+                </div>
+
                 <div className="rs-pane-hd"><h3>Columns on the Findings tab</h3></div>
                 <p className="rs-pane-sub">
                   The register is the complete record. Every column carries a note under its
@@ -401,7 +463,7 @@ export default function ExportModal({
                 </div>
               ) : (
                 <div style={{ width: PAGE_W * scale, height: (PAGE_H + 16) * pages * scale }}>
-                  <iframe title="Document preview" srcDoc={doc} scrolling="no"
+                  <iframe ref={frame} title="Document preview" srcDoc={doc} scrolling="no"
                     style={{
                       width: PAGE_W, height: (PAGE_H + 16) * pages, border: 0,
                       transform: `scale(${scale})`, transformOrigin: 'top left',
@@ -414,7 +476,7 @@ export default function ExportModal({
               </div>
             ) : (
               <div className="sc-wrap">
-                <table className="sc-table">
+                <table className={`sc-table sc-grid-${theme.grid}`} style={sheetPreviewVars(theme) as CSSProperties}>
                   <thead>
                     <tr>{previewCols.map((c) => (
                       <th key={c.key} style={{ minWidth: Math.round(c.width * 0.62) }}>{c.header}</th>

@@ -12,6 +12,7 @@ import OAuthConsent from './pages/OAuthConsent'
 import Guide from './pages/Guide'
 import Team from './pages/Team'
 import Templates from './pages/Templates'
+import Designs from './pages/Designs'
 import Join from './pages/Join'
 import Account from './pages/Account'
 import Legal from './pages/Legal'
@@ -104,6 +105,7 @@ export default function App() {
         <Route path="/audits" element={<Audits />} />
         <Route path="/audit/:auditId" element={<AuditView />} />
         <Route path="/templates" element={<Templates />} />
+        <Route path="/designs" element={<Designs />} />
         <Route path="/guide" element={<Guide />} />
         <Route path="/mcp" element={<McpPage />} />
         <Route path="/api" element={<Navigate to={{ pathname: '/mcp', hash: '#api' }} replace />} />

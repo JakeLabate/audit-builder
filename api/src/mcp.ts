@@ -176,7 +176,10 @@ export const TOOLS: Tool[] = [
       'Change an audit. Moving status to delivered freezes every finding reference. ' +
       'The overview fields are patched here too: question, objective, commissioned_by, due_on, kpis, scope, ' +
       'summary (the executive summary) and themes ({id, title, note, finding_ids}, a finding in one theme at most). ' +
-      'Send a json field whole: kpis, scope and themes are replaced, not merged.',
+      'Send a json field whole: kpis, scope and themes are replaced, not merged. ' +
+      'export_design sets how this audit exports, {pdf, sheet} with either optional: ' +
+      'pdf is classic, editorial, bold, minimal or dossier; sheet is classic, ledger or grid. ' +
+      'Leave a key out and that half follows the brand, then the workspace.',
     inputSchema: params({ audit_id: str(''), patch: { type: 'object' } }, ['audit_id', 'patch']),
     run: (env, ctx, a) => audits.update(env, ctx, String(a.audit_id), a.patch as Json),
   },

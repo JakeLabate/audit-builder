@@ -6,9 +6,28 @@ import { nextRefFor } from './taxonomy'
 /** RLS does the filtering, so no query here passes an org id as a filter. */
 
 export async function currentOrg(): Promise<Org | null> {
-  const { data, error } = await supabase.from('orgs').select('id,name,slug').limit(1).maybeSingle()
+  const { data, error } = await supabase.from('orgs').select('id,name,slug,export_design').limit(1).maybeSingle()
   if (error) throw error
   return data
+}
+
+/** One workspace by id. An audit names its workspace, and a person can be in
+ *  more than one, so anything resolving an audit's settings asks for that one. */
+export async function getOrg(id: string): Promise<Org | null> {
+  const { data, error } = await supabase.from('orgs').select('id,name,slug,export_design').eq('id', id).maybeSingle()
+  if (error) throw error
+  return data
+}
+
+/**
+ * Change a workspace setting. Only an owner can: row level security turns
+ * anyone else's update into one that matches no row, which PostgREST reports
+ * as success, so the row is read back and an empty answer is said out loud.
+ */
+export async function updateOrg(id: string, patch: Partial<Pick<Org, 'export_design'>>): Promise<void> {
+  const { data, error } = await supabase.from('orgs').update(patch).eq('id', id).select('id')
+  if (error) throw error
+  if (!data?.length) throw new Error('Only an owner of this workspace can change that.')
 }
 
 export async function listBrands(): Promise<Brand[]> {

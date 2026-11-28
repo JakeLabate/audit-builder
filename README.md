@@ -43,6 +43,30 @@ Checklists are optional. An audit without one behaves exactly as before.
 | **PDF** | The browser's own print engine against `src/export/print.css.ts`, which uses `@page` and mm units. No rendering service and no cost |
 | **Google Sheets** | Creates a new sheet in the user's Drive using the `drive.file` scope only, which Google classifies as non-sensitive: the app can only touch files it created |
 
+### Designs
+
+How an export looks is a design. There are five for the document (Classic,
+Editorial, Bold, Minimal, Dossier) and three for the register (Classic, Ledger,
+Grid), listed in `src/lib/designs.ts`.
+
+- **Same information.** A document design is a stylesheet in
+  `src/export/designs.css.ts`, laid over the one set of pages `pdf.ts` builds.
+  A register design is a set of colours and switches in `src/lib/sheettheme.ts`,
+  read by the one exporter in `sheets.ts`. Neither can leave a field out,
+  because neither builds the content. Every design keeps one finding to a page
+  and leaves out any part with nothing in it.
+- **On brand.** Every colour and face comes from the brand kit. The logo always
+  sits on the brand colour, which is the ground it was chosen against.
+- **Three levels.** `export_design` on the workspace, the brand and the audit,
+  each `{"pdf": "...", "sheet": "..."}` with either key optional. The audit
+  wins, then the brand, then the workspace, and a level that chose nothing
+  stores nothing and follows the one above. Set on `/designs`, on the brand
+  page, and in the export dialog. Over the API or MCP it is an ordinary field
+  on a brand or audit patch.
+- **Adding one.** Add the key and its description to `src/lib/designs.ts`, then
+  its stylesheet or its theme. The pickers, the previews and the export dialog
+  read the list, so nothing else changes.
+
 ## Run it
 
 ```bash
@@ -81,9 +105,9 @@ the full flow are in `api/README.md`.
 ```
 src/
   lib/       supabase client, types mirroring the schema, the score formula, data access
-  pages/     Login, Brands, BrandView, Audits, AuditView, Templates, McpPage (MCP, then the REST API), OAuthConsent
-  components/ Chrome, FindingEditor, Checklist, ChecklistBuilder
-  export/    serialize (JSON + CSV), pdf, print.css, sheets
+  pages/     Login, Brands, BrandView, Audits, AuditView, Templates, Designs, McpPage (MCP, then the REST API), OAuthConsent
+  components/ Chrome, FindingEditor, Checklist, ChecklistBuilder, DesignPicker
+  export/    serialize (JSON + CSV), pdf, print.css, designs.css, sheets
 supabase/    schema notes and how to pull the migrations
 ```
 

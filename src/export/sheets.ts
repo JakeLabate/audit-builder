@@ -2,6 +2,8 @@ import type { Audit, Brand, FindingFull, PriorityBand } from '../lib/types'
 import { resolveColumns, withRefs, type SheetCol } from '../lib/sheetcols'
 import { clientFindings } from '../lib/depth'
 import { auditScopeOf, baselineText, kpisOf, themesOf } from '../lib/overview'
+import { sheetTheme } from '../lib/sheettheme'
+import type { SheetDesignKey } from '../lib/designs'
 
 /**
  * Google Sheets export.
@@ -10,6 +12,10 @@ import { auditScopeOf, baselineText, kpisOf, themesOf } from '../lib/overview'
  * tabs: a summary a stakeholder can read on its own, a curated findings
  * register, a roadmap grouped by wave, and a method page that declares where
  * the evidence came from and how the score is computed.
+ *
+ * How it looks is a design, resolved by the caller (see lib/designs) and
+ * turned into plain values by lib/sheettheme. A design changes formatting
+ * only: the tabs, the columns and every value are the same in all of them.
  *
  * Scope is drive.file only, which Google classifies as non-sensitive: the app
  * can create files and touch files it created, and nothing else in the user's
@@ -38,32 +44,14 @@ declare global {
   }
 }
 
-/* ---------- brand ---------- */
-/** Sheets takes colors as 0..1 floats, so the document palette is converted once. */
+/* ---------- colour ---------- */
+/** Sheets takes colors as 0..1 floats. */
 const rgb = (hex: string) => ({
   red: parseInt(hex.slice(1, 3), 16) / 255,
   green: parseInt(hex.slice(3, 5), 16) / 255,
   blue: parseInt(hex.slice(5, 7), 16) / 255,
 })
-const INK = rgb('#191A3E')
-const INK_2 = rgb('#3B3D69')
-const TEAL = rgb('#0E8C8B')
-const WASH = rgb('#F4F4F9')
-const LINE = rgb('#E2E2ED')
-const MUTED = rgb('#71739A')
 const WHITE = rgb('#FFFFFF')
-const BAND_BG: Record<PriorityBand, ReturnType<typeof rgb>> = {
-  P1: rgb('#F6E4E7'),
-  P2: rgb('#FAF0DC'),
-  P3: rgb('#ECEAF7'),
-  P4: rgb('#F1F1F5'),
-}
-const BAND_FG: Record<PriorityBand, ReturnType<typeof rgb>> = {
-  P1: rgb('#8A1C2B'),
-  P2: rgb('#7E550A'),
-  P3: rgb('#4B3E96'),
-  P4: rgb('#5A5C80'),
-}
 
 /* ---------- auth ---------- */
 function loadGsi(): Promise<void> {
@@ -145,8 +133,19 @@ export async function exportToSheets(
   audit: Audit,
   findings: FindingFull[],
   byline = '',
+  /** How it looks. The caller resolves it from the audit, its brand and the
+   *  workspace. Classic is the register as it has always been. */
+  design: SheetDesignKey = 'classic',
 ): Promise<string> {
   const token = await getToken()
+  // Every colour below comes from the theme, and the theme comes from the
+  // brand kit, so the register is the client's as much as the document is.
+  const th = sheetTheme(brand, design)
+  const INK = rgb(th.ink)
+  const INK_2 = rgb(th.ink2)
+  const ACCENT = rgb(th.accent)
+  const LINE = rgb(th.line)
+  const MUTED = rgb(th.muted)
   const title = `${brand.name} / ${audit.title}`
   // The register is complete, but an internal finding is still not the
   // client's to read. Same rule as the document.
@@ -229,9 +228,12 @@ export async function exportToSheets(
 
   const roadmap: (string | number)[][] = [['Wave', 'Ref', 'Finding', 'Priority', 'Owner', 'Effort, days']]
   const waves = [...new Set(ordered.map((f) => f.wave ?? 0))].sort((a, b) => a - b)
+  // Which rows head a wave, so a design can set them apart from the findings.
+  const waveRows: number[] = []
   for (const w of waves) {
     const inWave = ordered.filter((f) => (f.wave ?? 0) === w)
     const days = inWave.reduce((n, f) => n + (f.effort_days ?? 0), 0)
+    waveRows.push(roadmap.length)
     roadmap.push([
       w ? `Wave ${w}` : 'Unassigned',
       '', `${inWave.length} finding${inWave.length === 1 ? '' : 's'}`, '', '',
@@ -350,11 +352,11 @@ export async function exportToSheets(
         range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: n },
         cell: {
           userEnteredFormat: {
-            backgroundColor: WASH,
+            backgroundColor: rgb(th.note.bg),
             verticalAlignment: 'TOP',
             wrapStrategy: 'WRAP',
             padding: { top: 6, bottom: 6, left: 10, right: 10 },
-            textFormat: { foregroundColor: MUTED, italic: true, fontSize: 9 },
+            textFormat: { foregroundColor: rgb(th.note.fg), italic: true, fontSize: 9 },
           },
         },
         fields: 'userEnteredFormat(backgroundColor,verticalAlignment,wrapStrategy,padding,textFormat)',
@@ -369,19 +371,43 @@ export async function exportToSheets(
         range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: cols },
         cell: {
           userEnteredFormat: {
-            backgroundColor: INK,
+            backgroundColor: rgb(th.header.bg),
             verticalAlignment: 'MIDDLE',
             padding: { top: 6, bottom: 6, left: 10, right: 10 },
-            textFormat: { foregroundColor: WHITE, bold: true, fontSize: 10 },
+            textFormat: { foregroundColor: rgb(th.header.fg), bold: true, fontSize: 10 },
           },
         },
         fields: 'userEnteredFormat(backgroundColor,verticalAlignment,padding,textFormat)',
       },
     },
     { updateDimensionProperties: { range: { sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 34 }, fields: 'pixelSize' } },
+    // A header set in ink on white needs its line, or it is just a bold row.
+    ...(th.header.rule ? [{
+      updateBorders: {
+        range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: cols },
+        bottom: { style: 'SOLID_MEDIUM', color: rgb(th.header.rule) },
+      },
+    }] : []),
   ]
 
-  // Summary: a cover, not a table.
+  /** Lines between cells, as the design draws them. */
+  const cellLines = (sheetId: number, from: number, to: number, n: number): unknown[] => {
+    const range = { sheetId, startRowIndex: from, endRowIndex: to, startColumnIndex: 0, endColumnIndex: n }
+    if (to <= from || th.grid === 'none') return []
+    const line = { style: 'SOLID', color: LINE }
+    return [{
+      updateBorders: th.grid === 'all'
+        ? { range, top: line, bottom: line, left: line, right: line, innerHorizontal: line, innerVertical: line }
+        : { range, innerHorizontal: line },
+    }]
+  }
+
+  // Summary: a cover, not a table. A design either fills the block at the top
+  // with the brand colour or sets the title in ink over a brand rule.
+  const COVER_BG = th.cover ? rgb(th.cover.bg) : WHITE
+  const COVER_FG = th.cover ? rgb(th.cover.fg) : INK
+  const COVER_SUB = th.cover ? rgb(th.cover.sub) : MUTED
+  const COVER_PAD = th.cover ? 18 : 4
   await safeBatch([
     { mergeCells: { range: { sheetId: SUM, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 }, mergeType: 'MERGE_ALL' } },
     { mergeCells: { range: { sheetId: SUM, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 6 }, mergeType: 'MERGE_ALL' } },
@@ -389,13 +415,20 @@ export async function exportToSheets(
     {
       repeatCell: {
         range: { sheetId: SUM, startRowIndex: 0, endRowIndex: 3, startColumnIndex: 0, endColumnIndex: 6 },
-        cell: { userEnteredFormat: { backgroundColor: INK, verticalAlignment: 'MIDDLE', padding: { left: 18, right: 18 }, textFormat: { foregroundColor: WHITE } } },
+        cell: { userEnteredFormat: { backgroundColor: COVER_BG, verticalAlignment: 'MIDDLE', padding: { left: COVER_PAD, right: COVER_PAD }, textFormat: { foregroundColor: COVER_FG } } },
         fields: 'userEnteredFormat(backgroundColor,verticalAlignment,padding,textFormat)',
       },
     },
-    { repeatCell: { range: { sheetId: SUM, startRowIndex: 0, endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { fontSize: 22, bold: true, foregroundColor: WHITE } } }, fields: 'userEnteredFormat.textFormat' } },
-    { repeatCell: { range: { sheetId: SUM, startRowIndex: 1, endRowIndex: 2 }, cell: { userEnteredFormat: { textFormat: { fontSize: 13, foregroundColor: WHITE } } }, fields: 'userEnteredFormat.textFormat' } },
-    { repeatCell: { range: { sheetId: SUM, startRowIndex: 2, endRowIndex: 3 }, cell: { userEnteredFormat: { textFormat: { fontSize: 10, foregroundColor: rgb('#B9BAD4') } } }, fields: 'userEnteredFormat.textFormat' } },
+    { repeatCell: { range: { sheetId: SUM, startRowIndex: 0, endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { fontSize: 22, bold: true, foregroundColor: COVER_FG } } }, fields: 'userEnteredFormat.textFormat' } },
+    { repeatCell: { range: { sheetId: SUM, startRowIndex: 1, endRowIndex: 2 }, cell: { userEnteredFormat: { textFormat: { fontSize: 13, foregroundColor: COVER_FG } } }, fields: 'userEnteredFormat.textFormat' } },
+    { repeatCell: { range: { sheetId: SUM, startRowIndex: 2, endRowIndex: 3 }, cell: { userEnteredFormat: { textFormat: { fontSize: 10, foregroundColor: COVER_SUB } } }, fields: 'userEnteredFormat.textFormat' } },
+    // With no filled block, a brand rule under the three lines closes the title.
+    ...(th.coverRule ? [{
+      updateBorders: {
+        range: { sheetId: SUM, startRowIndex: 2, endRowIndex: 3, startColumnIndex: 0, endColumnIndex: 6 },
+        bottom: { style: 'SOLID_THICK', color: rgb(th.coverRule) },
+      },
+    }] : []),
     { updateDimensionProperties: { range: { sheetId: SUM, dimension: 'ROWS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 54 }, fields: 'pixelSize' } },
     { updateDimensionProperties: { range: { sheetId: SUM, dimension: 'ROWS', startIndex: 1, endIndex: 3 }, properties: { pixelSize: 26 }, fields: 'pixelSize' } },
     { updateDimensionProperties: { range: { sheetId: SUM, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 230 }, fields: 'pixelSize' } },
@@ -442,12 +475,7 @@ export async function exportToSheets(
     { repeatCell: { range: { sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: 1, endColumnIndex: 2 }, cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10, foregroundColor: INK } } }, fields: 'userEnteredFormat.textFormat' } },
     { repeatCell: { range: { sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: 3, endColumnIndex: 4 }, cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', textFormat: { bold: true, fontSize: 11, foregroundColor: INK } } }, fields: 'userEnteredFormat(horizontalAlignment,textFormat)' } },
     { repeatCell: { range: { sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: 2, endColumnIndex: 3 }, cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', textFormat: { bold: true, fontSize: 10 } } }, fields: 'userEnteredFormat(horizontalAlignment,textFormat)' } },
-    {
-      updateBorders: {
-        range: { sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: 0, endColumnIndex: cols.length },
-        innerHorizontal: { style: 'SOLID', color: LINE },
-      },
-    },
+    ...cellLines(FIND, 2, ordered.length + 2, cols.length),
     { setBasicFilter: { filter: { range: { sheetId: FIND, startRowIndex: 0, endRowIndex: ordered.length + 2, startColumnIndex: 0, endColumnIndex: cols.length } } } },
   ])
 
@@ -460,7 +488,10 @@ export async function exportToSheets(
           ranges: [{ sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: 2, endColumnIndex: 3 }],
           booleanRule: {
             condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: band }] },
-            format: { backgroundColor: BAND_BG[band], textFormat: { foregroundColor: BAND_FG[band], bold: true } },
+            format: {
+              ...(th.bands[band].bg ? { backgroundColor: rgb(th.bands[band].bg!) } : {}),
+              textFormat: { foregroundColor: rgb(th.bands[band].fg), bold: true },
+            },
           },
         },
       },
@@ -474,8 +505,24 @@ export async function exportToSheets(
       updateDimensionProperties: { range: { sheetId: ROAD, dimension: 'COLUMNS', startIndex: i, endIndex: i + 1 }, properties: { pixelSize: w }, fields: 'pixelSize' },
     })),
     { repeatCell: { range: { sheetId: ROAD, startRowIndex: 1, endRowIndex: roadmap.length, startColumnIndex: 0, endColumnIndex: 6 }, cell: { userEnteredFormat: { verticalAlignment: 'TOP', padding: { top: 5, bottom: 5, left: 10, right: 10 }, wrapStrategy: 'WRAP', textFormat: { fontSize: 10, foregroundColor: INK_2 } } }, fields: 'userEnteredFormat(verticalAlignment,padding,wrapStrategy,textFormat)' } },
-    { repeatCell: { range: { sheetId: ROAD, startRowIndex: 1, endRowIndex: roadmap.length, startColumnIndex: 0, endColumnIndex: 1 }, cell: { userEnteredFormat: { backgroundColor: WASH, textFormat: { bold: true, fontSize: 10, foregroundColor: INK } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } },
-    { updateBorders: { range: { sheetId: ROAD, startRowIndex: 1, endRowIndex: roadmap.length, startColumnIndex: 0, endColumnIndex: 6 }, innerHorizontal: { style: 'SOLID', color: LINE } } },
+    { repeatCell: { range: { sheetId: ROAD, startRowIndex: 1, endRowIndex: roadmap.length, startColumnIndex: 0, endColumnIndex: 1 }, cell: { userEnteredFormat: { backgroundColor: th.wave.full ? WHITE : rgb(th.wave.bg), textFormat: { bold: true, fontSize: 10, foregroundColor: INK } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } },
+    ...cellLines(ROAD, 1, roadmap.length, 6),
+    // A design that fills its wave headings fills the whole row, so a wave
+    // reads as a band across the sheet with its findings under it.
+    ...(th.wave.full ? waveRows.map((r) => ({
+      repeatCell: {
+        range: { sheetId: ROAD, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 6 },
+        cell: { userEnteredFormat: { backgroundColor: rgb(th.wave.bg), textFormat: { bold: true, fontSize: 10, foregroundColor: rgb(th.wave.fg) } } },
+        fields: 'userEnteredFormat(backgroundColor,textFormat)',
+      },
+    })) : []),
+    // With no lines and no fill, a wave heading still needs something over it.
+    ...(th.grid === 'none' ? waveRows.map((r) => ({
+      updateBorders: {
+        range: { sheetId: ROAD, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 6 },
+        top: { style: 'SOLID', color: INK },
+      },
+    })) : []),
   ])
 
   // Method: a page, not a grid.
@@ -487,11 +534,71 @@ export async function exportToSheets(
     ...methodHeads.map((r) => ({
       repeatCell: {
         range: { sheetId: METH, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 3 },
-        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColor: TEAL } } },
+        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColor: ACCENT } } },
         fields: 'userEnteredFormat.textFormat',
       },
     })),
   ])
+
+  /* ---- what only some designs have ----
+     Each in a batch of its own. They are the newest requests here and the
+     least essential, so if Google refuses one it costs that one touch and
+     nothing that was already applied. */
+
+  // Stripes on every other finding.
+  if (th.zebra && ordered.length > 0) {
+    await safeBatch([{
+      addBanding: {
+        bandedRange: {
+          range: { sheetId: FIND, startRowIndex: 2, endRowIndex: ordered.length + 2, startColumnIndex: 0, endColumnIndex: cols.length },
+          rowProperties: { firstBandColor: WHITE, secondBandColor: rgb(th.zebra) },
+        },
+      },
+    }])
+  }
+
+  // The sheet's own gridlines off, where the design draws its own or none.
+  if (!th.gridlines) {
+    await safeBatch([FIND, ROAD].map((sheetId) => ({
+      updateSheetProperties: {
+        properties: { sheetId, gridProperties: { hideGridlines: true } },
+        fields: 'gridProperties.hideGridlines',
+      },
+    })))
+  }
+
+  // Tabs in the brand colour.
+  if (th.tab) {
+    await safeBatch([SUM, FIND, ROAD, METH].map((sheetId) => ({
+      updateSheetProperties: {
+        properties: { sheetId, tabColorStyle: { rgbColor: rgb(th.tab!) } },
+        fields: 'tabColorStyle',
+      },
+    })))
+  }
+
+  // The brand's faces, last. Every request above that sets a text format
+  // replaces the whole format, family included, so the family is laid over
+  // the finished sheet with a mask that touches nothing else.
+  if (th.font) {
+    const family = (sheetId: number, fontFamily: string, rows?: [number, number]) => ({
+      repeatCell: {
+        range: rows ? { sheetId, startRowIndex: rows[0], endRowIndex: rows[1] } : { sheetId },
+        cell: { userEnteredFormat: { textFormat: { fontFamily } } },
+        fields: 'userEnteredFormat.textFormat.fontFamily',
+      },
+    })
+    const head = th.headFont ?? th.font
+    await safeBatch([SUM, FIND, ROAD, METH].map((sheetId) => family(sheetId, th.font!)))
+    await safeBatch([
+      family(SUM, head, [0, 2]),
+      family(FIND, head, [0, 1]),
+      family(ROAD, head, [0, 1]),
+      family(METH, head, [0, 1]),
+      ...methodHeads.map((r) => family(METH, head, [r, r + 1])),
+      ...sumHeads.map((r) => family(SUM, head, [r, r + 1])),
+    ])
+  }
 
   return created.spreadsheetUrl ?? `https://docs.google.com/spreadsheets/d/${id}`
 }

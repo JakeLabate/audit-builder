@@ -655,27 +655,36 @@ input, select, textarea { font-size: 16px }
 
 .sc-stage{align-items:flex-start;justify-content:flex-start;padding:0}
 .sc-wrap{width:100%;overflow:auto;padding:14px}
+/* The colours are the sheet design's, handed in as variables by
+   sheetPreviewVars, so the preview is the theme the exporter will format the
+   real sheet with. Each one falls back to the Classic look. */
 .sc-table{border-collapse:collapse;font-size:11.5px;background:var(--surface);
-  table-layout:auto;border:1px solid var(--line-2)}
+  table-layout:auto;border:1px solid var(--line-2);font-family:var(--sc-font,inherit)}
 .sc-table th{
-  background:var(--ink);color:#fff;font-weight:600;font-size:11.5px;text-align:left;
-  padding:8px 10px;border-right:1px solid #2F3057;white-space:nowrap;position:sticky;top:0;
+  background:var(--sc-head-bg,var(--ink));color:var(--sc-head-fg,#fff);font-weight:600;font-size:11.5px;text-align:left;
+  font-family:var(--sc-head-font,inherit);
+  padding:8px 10px;border-right:1px solid rgba(128,128,150,.28);white-space:nowrap;position:sticky;top:0;
+  box-shadow:inset 0 -3px 0 var(--sc-head-rule,transparent);
 }
 .sc-table .sc-notes td{
-  background:var(--wash);color:var(--muted);font-style:italic;font-size:10.5px;
+  background:var(--sc-note-bg,var(--wash));color:var(--sc-note-fg,var(--muted));font-style:italic;font-size:10.5px;
   padding:7px 10px;border-right:1px solid var(--line);border-bottom:1px solid var(--line-2);
   vertical-align:top;line-height:1.4;
 }
 .sc-table tbody td{
-  padding:7px 10px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);
-  color:var(--ink-2);vertical-align:top;max-width:280px;overflow:hidden;
+  padding:7px 10px;border-right:1px solid var(--line);border-bottom:1px solid var(--sc-line,var(--line));
+  color:var(--sc-ink2,var(--ink-2));vertical-align:top;max-width:280px;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap;
 }
-.sc-table tbody tr:nth-child(even) td{background:#FAFAFD}
-.sc-band{font-family:var(--mono);font-weight:500;text-align:center}
-.sc-band.b-p1{background:#FBEFF1 !important;color:var(--crim)}
-.sc-band.b-p2{background:#FDF6E7 !important;color:var(--amber)}
-.sc-band.b-p3{background:#F0F8F8 !important;color:var(--teal-d)}
+.sc-table tbody tr:nth-child(even) td{background:var(--sc-zebra,transparent)}
+/* Lines between cells, as the design draws them on the real sheet. */
+.sc-grid-none .sc-notes td,.sc-grid-none tbody td{border-right-color:transparent;border-bottom-color:transparent}
+.sc-grid-all .sc-notes td,.sc-grid-all tbody td{border-right-color:var(--sc-line,var(--line));border-bottom-color:var(--sc-line,var(--line))}
+.sc-band{font-family:var(--mono);font-weight:600;text-align:center}
+.sc-band.b-p1{background:var(--sc-p1-bg,#F6E4E7) !important;color:var(--sc-p1-fg,var(--crim))}
+.sc-band.b-p2{background:var(--sc-p2-bg,#FAF0DC) !important;color:var(--sc-p2-fg,var(--amber))}
+.sc-band.b-p3{background:var(--sc-p3-bg,#ECEAF7) !important;color:var(--sc-p3-fg,var(--violet))}
+.sc-band.b-p4{background:var(--sc-p4-bg,#F1F1F5) !important;color:var(--sc-p4-fg,var(--muted))}
 .sc-more{font-size:12px;color:var(--muted);margin:10px 2px 0}
 
 /* Export dialog: one action, two halves. The register is the record, the
@@ -698,6 +707,12 @@ input, select, textarea { font-size: 16px }
   border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface)}
 .rs-kind input:focus{outline:2px solid var(--teal-d);outline-offset:-1px}
 .rs-kind .hint{margin:6px 0 0}
+/* The design, chosen where it previews. A select, so it is one tap on a
+   phone and takes one line of the options pane. */
+.rs-kind select{width:100%;padding:8px 10px;font:inherit;font-size:14px;color:var(--ink);
+  border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface)}
+.rs-kind select:focus{outline:2px solid var(--teal-d);outline-offset:-1px}
+.rs-design{margin-bottom:16px}
 
 .kit-logo-url{display:block;font-size:12px;font-weight:600;color:var(--label);margin:12px 0 6px}
 .kit-logo-url-in{width:100%;max-width:340px;padding:7px 9px;font:inherit;font-size:13px;color:var(--ink);
@@ -1781,3 +1796,71 @@ input, select, textarea { font-size: 16px }
 }
 /* A field's add button is a button, not a full width bar. */
 .ov-part .grp-b .fld>.btn.sm{align-self:flex-start}
+
+/* ======================================================================
+   Export designs.
+
+   A design is picked from cards, and each card's picture is the real
+   export for the brand in question: the document as a scaled iframe of the
+   exporter's own output, the register as a few rows drawn from the theme
+   the exporter formats the sheet with. The cards wrap, so on a phone they
+   stack and nothing slides sideways.
+   ====================================================================== */
+.dz{display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:14px;align-items:stretch}
+.dz.dz-sheet{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.dz-card{display:flex;flex-direction:column;gap:0;text-align:left;padding:10px 10px 12px;cursor:pointer;
+  background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);color:inherit;min-width:0}
+.dz-card:hover:not(:disabled){border-color:var(--muted)}
+.dz-card.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.dz-card:disabled{cursor:default}
+.dz-card:disabled:not(.on){opacity:.72}
+.dz-card:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.dz-thumb{position:relative;width:100%;overflow:hidden;background:var(--wash);border-radius:1px;margin-bottom:11px}
+.dz-thumb iframe{display:block;border:0;transform-origin:top left;pointer-events:none;background:transparent}
+.dz-pdf .dz-thumb{background:transparent}
+.dz-sheet .dz-thumb,.dz-thumb.dz-sheet{background:var(--surface);border:1px solid var(--line)}
+.dz-thumb.dz-sheet .sc-table{width:100%;border:0;font-size:9.5px}
+.dz-thumb.dz-sheet .sc-table th{position:static;padding:6px 7px;font-size:9.5px}
+.dz-thumb.dz-sheet .sc-table .sc-notes td{padding:5px 7px;font-size:8.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}
+.dz-thumb.dz-sheet .sc-table tbody td{padding:5px 7px;max-width:0}
+.dz-thumb.dz-sheet .sc-table th:nth-child(2){width:46%}
+.dz-name{display:flex;align-items:baseline;gap:8px;font-family:var(--disp);font-weight:600;font-size:14.5px;color:var(--ink)}
+.dz-name i{font-family:var(--mono);font-style:normal;font-weight:500;font-size:9.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:#fff;background:var(--ink);padding:2px 6px;border-radius:var(--r)}
+.dz-what{display:block;margin-top:4px;font-size:12.5px;line-height:1.5;color:var(--muted)}
+.dz-follow{border-style:dashed}
+.dz-follow.on{border-style:solid}
+.dz-locked{grid-column:1/-1;margin:2px 0 0;padding:10px 13px;background:#FDF6E7;border-left:3px solid var(--amber);
+  font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+
+/* The Designs page is a gallery, so it runs wider than a page of prose. */
+.dzp{max-width:1120px}
+.dzp .doc-hd p,.dzp .doc-p{max-width:76ch}
+.dzp-with{display:flex;align-items:center;gap:10px 12px;flex-wrap:wrap;margin:-10px 0 30px;font-size:12.5px;color:var(--muted)}
+.dzp-with label{font-size:13px;font-weight:600;color:var(--label)}
+.dzp-with select{padding:7px 10px;font:inherit;font-size:14px;color:var(--ink);border:1px solid var(--line-2);
+  border-radius:var(--r);background:var(--surface);max-width:100%}
+.dzp-with span{flex:1 1 260px}
+.dzp-own{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.dzp-own li{display:flex;align-items:baseline;gap:6px 12px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.dzp-own li span:last-child{color:var(--muted);font-size:12.5px}
+.dzp-lv{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);flex:0 0 46px}
+
+/* On the brand page, under the kit. */
+.bdz{margin-bottom:10px}
+.bdz-sub{max-width:76ch;margin-bottom:18px}
+.bdz-h{font-family:var(--disp);font-weight:600;font-size:14.5px;color:var(--ink);margin:22px 0 10px}
+.bdz .bdz-sub + .issue + .bdz-h,.bdz .bdz-sub + .bdz-h{margin-top:0}
+h2.brand-h{margin-top:34px}
+.brand-audits + h2.brand-h{margin-top:0}
+
+@media (max-width:760px){
+  /* One to a row on a phone. Two across, a page of the document is 70px wide
+     and every design looks the same. */
+  .dz,.dz.dz-sheet{grid-template-columns:minmax(0,1fr);gap:10px}
+  .dz-card{padding:10px 10px 12px}
+  .dz-what{font-size:13px}
+  .rs-kind select,.dzp-with select{min-height:44px;font-size:16px}
+  .dzp-with{margin-top:0}
+  .dzp-with select{flex:1 1 100%}
+}

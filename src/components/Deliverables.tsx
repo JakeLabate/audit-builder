@@ -1,5 +1,16 @@
 import { useState } from 'react'
 import { LINK_DAYS, deleteExport, documentLink, type ExportRow } from '../lib/exports'
+import { pdfDesign, sheetDesign } from '../lib/designs'
+
+/** How an export looked, in words. Empty for rows from before designs. */
+function designLine(r: ExportRow): string {
+  const d = r.design
+  if (!d) return ''
+  return [
+    d.pdf && r.pdf_path ? `Document in ${pdfDesign(d.pdf).name}` : '',
+    d.sheet && r.sheet_url ? `register in ${sheetDesign(d.sheet).name}` : '',
+  ].filter(Boolean).join(', ').replace(/^r/, 'R')
+}
 
 /**
  * Every export this audit has produced, with both links.
@@ -105,6 +116,7 @@ export default function Deliverables({ rows, error, onChanged, onClose, onExport
                     {r.finding_count != null && ` · ${r.finding_count} finding${r.finding_count === 1 ? '' : 's'}`}
                   </span>
                   {r.created_by && <span className="dlv-by">{r.created_by}</span>}
+                  {designLine(r) && <span className="dlv-by">{designLine(r)}</span>}
                 </div>
 
                 <div className="dlv-links">

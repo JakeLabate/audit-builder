@@ -3,9 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { deleteBrand, listAudits, listBrands, updateBrand } from '../lib/api'
 import type { Audit, Brand } from '../lib/types'
 import BrandKit from '../components/BrandKit'
+import BrandDesigns from '../components/BrandDesigns'
 
 /**
- * One brand: its name, domain and brand kit.
+ * One brand: its name, domain, brand kit and export designs.
  *
  * Its audits are managed on the Audits tab, not here. This page says how many
  * there are and links to them, narrowed to this brand.
@@ -110,7 +111,15 @@ export default function BrandView() {
       </div>
 
       <h2 className="brand-h">Brand kit</h2>
-      <BrandKit brand={brand} onChange={setBrand} />
+      {/* The kit saves on a delay and the designs save at once, so each hands
+          back only what it changed and is merged into the brand as it now is.
+          Replacing the whole brand would let one overwrite the other. */}
+      <BrandKit brand={brand}
+        onChange={(b) => setBrand((prev) => (prev ? { ...prev, identity: b.identity } : b))} />
+
+      <h2 className="brand-h">Export design</h2>
+      <BrandDesigns brand={brand}
+        onChange={(d) => setBrand((prev) => (prev ? { ...prev, export_design: d } : prev))} />
     </div>
   )
 }
