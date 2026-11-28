@@ -1,6 +1,6 @@
 -- Sample audits already copied into workspaces get the overview the template
 -- now has (20261128032145). Kept apart from that migration because it writes
--- to other people's workspaces, so it is applied on its own once approved.
+-- to other people's workspaces; applied once Jake approved it.
 -- Copies already made carry the same overview. Their findings are matched by
 -- reference, which is the same in every copy. Only columns that were empty
 -- until now are written, and the scope note only where nobody has edited it.
