@@ -22,6 +22,7 @@ The app's own migrations, in order (the SQL for the newest lives in `supabase/mi
 | 20261128032145 | `sample_template_overview` | The sample template's Overview, consistent with its findings |
 | 20261128033126 | `sample_template_brief_section` | The sample's document opens with The brief |
 | 20261128033751 | `sample_copies_overview` | Gives the 8 sample audits already copied into workspaces the same Overview and brief page, only where those fields were empty and the sections untouched |
+| 20261128145025 | `export_designs` | `export_design` on `orgs`, `brands` and `audits`: the document and register design each level chose, as `{"pdf","sheet"}` with either key optional. Empty follows the level above, and empty everywhere is the Classic design the app has always exported. `exports.design` records which designs an export was made with |
 
 ## Pull them into this repo
 

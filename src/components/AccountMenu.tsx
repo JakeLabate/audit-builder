@@ -17,6 +17,7 @@ export const PAGES: { to: string; label: string; also?: string }[] = [
   // An audit's own page is under the Audits tab too.
   { to: '/audits', label: 'Audits', also: '/audit/' },
   { to: '/templates', label: 'Templates' },
+  { to: '/designs', label: 'Designs' },
   { to: '/guide', label: 'How it works' },
   { to: '/mcp', label: 'MCP' },
   { to: '/team', label: 'People' },

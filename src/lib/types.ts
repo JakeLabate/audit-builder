@@ -82,7 +82,13 @@ export interface Profile {
   byline: string | null
 }
 
-export interface Org { id: string; name: string; slug: string }
+export interface Org {
+  id: string
+  name: string
+  slug: string
+  /** The workspace's export designs. Read it through lib/designs. */
+  export_design?: unknown
+}
 
 export interface Brand {
   id: string
@@ -99,6 +105,9 @@ export interface Brand {
   /** Per-brand controlled vocabulary: pillars, templates and their universes,
    *  markets, owner teams, metrics, units, and the crawl cadence. */
   registry: Record<string, unknown>
+  /** This brand's export designs, where it has its own. A missing half
+   *  follows the workspace. Read it through lib/designs. */
+  export_design?: unknown
   created_at: string
   updated_at: string
 }
@@ -135,6 +144,9 @@ export interface Audit {
   /** Hold each finding to one page in the document. Off, a long finding runs
    *  onto a second page and nothing is left out. */
   doc_compact?: boolean
+  /** This audit's export designs, where it has its own. A missing half
+   *  follows the brand, then the workspace. Read it through lib/designs. */
+  export_design?: unknown
   /** The default "Found on" for every finding in this audit. */
   started_on: string | null
   /** The default evidence window for every finding in this audit. */

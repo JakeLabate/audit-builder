@@ -1,13 +1,15 @@
 import type { Audit, Brand, Example, FindingFull } from '../lib/types'
 import { categoryOf, isCategoryPath } from '../lib/taxonomy'
 import { BAND_LABEL } from '../lib/score'
-import { contrast, fontHref, identityOf, reportPalette, shade } from '../lib/brand'
+import { contrast, designPalette, fontHref, identityOf, reportPalette, shade } from '../lib/brand'
 import { sectionsOf, type SectionKey } from '../lib/sections'
 import { clientFindings } from '../lib/depth'
 import { kindOf } from '../lib/kind'
 import { scopeOf } from '../lib/scope'
 import { coverage, groupByPath, type AuditCheck } from '../lib/checks'
 import { auditScopeOf, baselineText, kpisOf, themesOf } from '../lib/overview'
+import { pdfDesign, type PdfDesignKey } from '../lib/designs'
+import { DESIGN_CSS } from './designs.css'
 
 /**
  * PDF export. The browser's own print engine does the rendering, so there is
@@ -85,6 +87,15 @@ function splitBlk(label: string, items: string[], wrap: string, cls = '', once =
     (once ? `<div data-once>${once}</div>` : '') +
     wrap.replace('%s', items.join('')) + '</section>'
 }
+
+/**
+ * The head of a section page: what kind of page this is, then its headline.
+ * One element, so a design can set the pair as a unit (a band, a rule under
+ * both) and the layout pass keeps them together.
+ */
+const lead = (label: string, title: string, extra = '') =>
+  `<header class="shd" data-keep><div class="sect">${esc(label)}</div>` +
+  `<h1 class="ttl">${esc(title)}</h1>${extra}</header>`
 
 /** A page with a running foot. `cont` names it on any page it runs onto. */
 function pageOf(
@@ -215,11 +226,11 @@ function findingPage(
     compact ? droppable(html, order, kind) : html
   const title = has(f.title) ? f.title : 'Untitled finding'
 
-  const head = `<div class="hd" data-keep>
+  const head = `<header class="fhd" data-keep><div class="hd">
     ${f.band ? `<span class="tag ${SEV[f.band]}">${esc(f.band)}</span>` : ''}
     <span class="idl">${esc(f.ref)}</span><span class="sp"></span>
     ${has(f.raised) ? `<span class="idl">Found ${esc(day(f.raised))}</span>` : ''}</div>
-    <h1 class="ttl" data-keep>${esc(title)}</h1>`
+    <h1 class="ttl">${esc(title)}</h1></header>`
 
   const why = splitBlk('Why it matters', paras(f.impact_basis), '<div data-items>%s</div>')
 
@@ -317,9 +328,8 @@ function briefPage(audit: Audit, running: string, folio: number): string {
       <td class="num">${esc(k.baseline == null ? 'Not measured' : baselineText(k))}</td>
       ${dated ? `<td class="num">${esc(has(k.as_of) ? day(k.as_of) : '')}</td>` : ''}</tr>`)
   const head = `<thead><tr><th>Number</th><th style="text-align:right">Where it stood</th>${dated ? '<th style="text-align:right">As of</th>' : ''}</tr></thead>`
-  const inner = `<div class="sect" data-keep>The brief</div>` +
-    `<h1 class="ttl" data-keep>${esc(has(audit.question) ? audit.question!.trim() : 'What this audit set out to do')}</h1>` +
-    (who ? `<p class="note" data-keep>${who}</p>` : '') +
+  const inner = lead('The brief', has(audit.question) ? audit.question!.trim() : 'What this audit set out to do',
+    who ? `<p class="note">${who}</p>` : '') +
     splitBlk('The objective', paras(audit.objective), '<div data-items>%s</div>') +
     splitBlk('The numbers it is judged on', rows, `<table class="ev tbl-kpi">${head}<tbody data-items>%s</tbody></table>`)
   return pageOf({ kind: 'brief', label: 'Brief', cont: 'The brief' }, inner, running, folio)
@@ -417,7 +427,7 @@ function summaryPage(audit: Audit, findings: FindingFull[], running: string, fol
       ? `<tr><td class="sub">${esc(t.title)}${has(t.note) ? `<span class="kpisrc">${esc(t.note)}</span>` : ''}</td><td class="dt">${refs.map((r) => `<span class="nw">${esc(r)}</span>`).join(', ')}</td></tr>`
       : ''
   }).filter(Boolean)
-  const inner = `<div class="sect" data-keep>What we found</div><h1 class="ttl" data-keep>${esc(headline)}</h1>` +
+  const inner = lead('What we found', headline) +
     splitBlk('In short', paras(audit.summary), '<div data-items>%s</div>') +
     bands +
     splitBlk('The themes', themeRows, table('tbl-theme')) +
@@ -476,7 +486,7 @@ function methodPage(audit: Audit, anyScored: boolean, running: string, folio: nu
   // nothing, has no method to print. A heading over an empty page is worse
   // than no page.
   if (!said) return ''
-  const inner = `<div class="sect" data-keep>Method and scope</div><h1 class="ttl" data-keep>How this was done</h1>` + said
+  const inner = lead('Method and scope', 'How this was done') + said
 
   return pageOf({ kind: 'method', label: 'Method', cont: 'How this was done' }, inner, running, folio)
 }
@@ -523,12 +533,12 @@ function coveragePage(
   const groups = groupByPath(checks).map((g) =>
     splitBlk(g.category, g.subs.flatMap((s) => s.items.map((k) => row(s.sub, k))), table))
 
-  const lead = `<p class="body">${has(name) ? `This audit worked from the ${esc(name)} checklist. ` : ''}A check
+  const intro = `<p class="body">${has(name) ? `This audit worked from the ${esc(name)} checklist. ` : ''}A check
     that passed leaves no finding behind, so it is listed here: what was looked at is on the record,
     not only what was wrong.${c.fail ? ' A check that raised an issue names its finding.' : ''}</p>`
 
-  const inner = `<div class="sect" data-keep>What was checked</div><h1 class="ttl" data-keep>${esc(headline)}</h1>` +
-    `<section class="blk">${lead}<div class="sumbands" style="margin-top:4mm">${tiles.join('')}</div></section>` +
+  const inner = lead('What was checked', headline) +
+    `<section class="blk">${intro}<div class="sumbands" style="margin-top:4mm">${tiles.join('')}</div></section>` +
     groups.join('')
   return pageOf({ kind: 'coverage', label: 'Coverage', cont: 'What was checked' }, inner, running, folio)
 }
@@ -578,8 +588,7 @@ function roadmapPage(findings: FindingFull[], running: string, folio: number): s
       + (sized.length < findings.length ? `, with ${findings.length - sized.length} still to size` : '')
     : `${count(findings.length, 'fix', 'fixes')}, in order`
 
-  const inner = `<div class="sect" data-keep>${anyWave ? 'Roadmap' : 'The work'}</div>
-    <h1 class="ttl" data-keep>${esc(headline)}</h1>${blocks}`
+  const inner = lead(anyWave ? 'Roadmap' : 'The work', headline) + blocks
   return pageOf({ kind: 'roadmap', label: anyWave ? 'Roadmap' : 'The work', cont: anyWave ? 'Roadmap' : 'The work' }, inner, running, folio)
 }
 
@@ -598,8 +607,7 @@ function appendixPage(findings: FindingFull[], running: string, folio: number): 
   if (some((f) => f.action) || some((f) => f.steps)) rows.push(['The fix', 'What to do, written as an instruction to the team that can do it, in steps that need no follow-up question.'])
   if (some((f) => f.verification_method)) rows.push(['How we will know it worked', 'The check that proves the fix. It was written before the fix, so it is a real test rather than one chosen to pass.'])
 
-  const inner = `<div class="sect" data-keep>How to read this</div>
-    <h1 class="ttl" data-keep>What each part of a finding page is telling you</h1>
+  const inner = lead('How to read this', 'What each part of a finding page is telling you') + `
     <section class="blk" data-split><table class="ev tbl-read"><tbody data-items>${
       rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table></section>
     <section class="blk"><p class="body">If a finding says something you know to be wrong, say so. The record is
@@ -626,6 +634,10 @@ export function buildPrintDocument(
   /** The audit's checklist, for the page that says what was looked at. An
    *  audit without one simply has no such page. */
   checks: AuditCheck[] = [],
+  /** How it looks. Resolved by the caller from the audit, its brand and the
+   *  workspace (see lib/designs). The pages are the same in every design: a
+   *  design is a stylesheet over this markup, never a different document. */
+  design: PdfDesignKey = 'classic',
 ): string {
   // exposure exists so a finding can stay in the register without reaching the
   // client. Scored findings lead, highest first; the rest keep the order they
@@ -652,6 +664,25 @@ export function buildPrintDocument(
   // The brand's own colours and faces, injected as variables the print
   // stylesheet already reads. A pale brand colour would make white cover text
   // unreadable, so what goes on top is decided by contrast, not assumed.
+  //
+  // Classic is the stylesheet in print.css and gets the block it always had.
+  // Any other design gets the kit as a wider set of variables (text, rules
+  // and fills all tinted from the brand) and then its own rules on top, which
+  // is the whole of what a design is.
+  const which = pdfDesign(design).key
+  const dp = designPalette(id)
+  const designCss = which === 'classic' ? `
+    .cover{background:${pal.primary};color:${pal.onPrimary}}
+    .cover .chip{background:transparent;border:1px solid ${pal.onPrimary};color:${pal.onPrimary}}
+    .cover .cvtitle,.cover .cvsub,.cover .cvstats b,.cover .cvstats span,.cover .cvfoot{color:${pal.onPrimary}}
+    .cover .cvstats{border-top:1px solid ${pal.onPrimary}55;border-bottom:1px solid ${pal.onPrimary}55}` : `
+    :root{
+      --ink:${dp.ink}; --ink2:${dp.ink2}; --muted:${dp.muted}; --line:${dp.line}; --wash:${dp.wash};
+      --brand-ink:${dp.ink}; --brand-wash:${dp.wash}; --brand-rule:${dp.line};
+      --fill:${dp.fill}; --fill-on:${dp.onFill}; --rule:${dp.rule};
+      --accent:${dp.accentFill}; --accent-on:${dp.onAccentFill};
+    }
+    ${DESIGN_CSS[which]}`
   const brandCss = `<style>
     @import url('${fontHref(id)}');
     :root{
@@ -660,14 +691,10 @@ export function buildPrintDocument(
       --disp:'${id.type.display}',Georgia,serif; --body:'${id.type.body}',Arial,sans-serif;
       --teal-d:${accentText};
     }
-    .cover{background:${pal.primary};color:${pal.onPrimary}}
-    .cover .chip{background:transparent;border:1px solid ${pal.onPrimary};color:${pal.onPrimary}}
-    .cover .cvtitle,.cover .cvsub,.cover .cvstats b,.cover .cvstats span,.cover .cvfoot{color:${pal.onPrimary}}
-    .cover .cvstats{border-top:1px solid ${pal.onPrimary}55;border-bottom:1px solid ${pal.onPrimary}55}
     .cvlogo{max-height:16mm;max-width:70mm;margin-bottom:auto}
     .cvslogan{font-family:var(--disp);font-size:13pt;font-weight:500;opacity:.85;margin:3mm 0 0}
     .cvcontact{font-family:var(--mono);font-size:7.6pt;letter-spacing:.1em;text-transform:uppercase;
-      opacity:.75;margin:7mm 0 0}
+      opacity:.75;margin:7mm 0 0}${designCss}
   </style>`
 
   const logo = logoUrl
@@ -694,7 +721,7 @@ export function buildPrintDocument(
     stats.push([audit.urls_crawled.toLocaleString('en-US'), audit.urls_crawled === 1 ? 'Page reviewed' : 'URLs crawled'])
   }
 
-  const cover = `${brandCss}<div class="page" data-kind="cover"><div class="pg cover">
+  const cover = `${brandCss}<div class="page" data-kind="cover" data-design="${which}"><div class="pg cover">
     ${logo}
     <div class="chip">${esc(kindOf(audit))}</div>
     <h1 class="cvtitle">${esc(audit.title)}</h1>
@@ -735,8 +762,7 @@ export function buildPrintDocument(
         ${scored.length ? `<td class="b">${esc(f.band ?? '')}</td><td class="s">${f.score ?? ''}</td>` : ''}
         ${findingsOn ? `<td class="p" data-pageof="${esc(f.id)}">${startOf.findings + i}</td>` : ''}
       </tr>`)
-    const inner = `<div class="sect" data-keep>Contents</div>
-      <h1 class="ttl" data-keep>${scored.length ? 'Findings, in priority order' : 'The findings'}</h1>
+    const inner = lead('Contents', scored.length ? 'Findings, in priority order' : 'The findings') + `
       <section class="blk" data-split><table class="idx"><thead><tr><th></th><th>Finding</th>
         ${scored.length ? '<th class="r">Band</th><th class="r">Score</th>' : ''}${findingsOn ? '<th class="r">Page</th>' : ''}
         </tr></thead><tbody data-items>${rows.join('')}</tbody></table></section>`

@@ -3,9 +3,9 @@ import Deliverables, { DeliverablesRail } from '../components/Deliverables'
 import { listExports, type ExportRow } from '../lib/exports'
 import { Link, useParams } from 'react-router-dom'
 import {
-  evidenceUrl, createFinding, getAudit, listBrands, listFindings, nextRef, updateAudit, withBands,
+  evidenceUrl, createFinding, getAudit, getOrg, listBrands, listFindings, nextRef, updateAudit, withBands,
 } from '../lib/api'
-import type { Audit, Brand, FindingFull } from '../lib/types'
+import type { Audit, Brand, FindingFull, Org } from '../lib/types'
 import FindingEditor from '../components/FindingEditor'
 import Overview, { OVERVIEW_PARTS, type OverviewPart } from '../components/Overview'
 import { progress } from '../lib/overview'
@@ -56,7 +56,7 @@ export default function AuditView() {
   const dlvInList = dlvOpen && !wide
   // Resolved once when the dialog opens, so the preview and the printed
   // file are built from the same inputs.
-  const [ex, setEx] = useState<{ byline: string; logoUrl: string | null } | null>(null)
+  const [ex, setEx] = useState<{ byline: string; logoUrl: string | null; org: Org | null } | null>(null)
   // The export dialog resolves the byline and the signed logo URL once on
   // open, so the preview and the printed file are built from the same inputs.
 
@@ -304,7 +304,13 @@ export default function AuditView() {
     // The logo lives in a private bucket, so it has to be signed before either
     // the preview or the print window can load it.
     const path = identityOf(brand).logo_path
-    setEx({ byline, logoUrl: path ? await evidenceUrl(path) : null })
+    // The workspace holds the design this audit falls back to. If it cannot
+    // be read the export still opens, on the built-in design.
+    const [logoUrl, org] = await Promise.all([
+      path ? evidenceUrl(path) : Promise.resolve(null),
+      getOrg(audit.org_id).catch(() => null),
+    ])
+    setEx({ byline, logoUrl, org })
   }
 
 
@@ -576,6 +582,7 @@ export default function AuditView() {
         <ExportModal
           audit={audit}
           brand={brand}
+          org={ex.org}
           findings={findings}
           checks={checks}
           byline={ex.byline}

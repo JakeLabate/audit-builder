@@ -27,6 +27,8 @@ export interface ExportRow {
   columns: unknown
   finding_count: number | null
   note: string | null
+  /** The designs this export was made with, resolved. Null on older rows. */
+  design?: { pdf?: string; sheet?: string } | null
 }
 
 
@@ -94,6 +96,8 @@ export async function recordExport(row: {
   pdf_url: string | null
   finding_count: number
   note?: string | null
+  /** How it looked: the design each half was actually made with. */
+  design?: { pdf?: string; sheet?: string } | null
 }): Promise<ExportRow> {
   const { data: who } = await supabase.auth.getUser()
   const { data, error } = await supabase.from('exports').insert({
@@ -109,6 +113,7 @@ export async function recordExport(row: {
     columns: (row.audit as unknown as { sheet_columns?: unknown }).sheet_columns ?? [],
     finding_count: row.finding_count,
     note: row.note ?? null,
+    design: row.design ?? null,
   }).select().single()
   if (error) throw error
   return data as ExportRow
