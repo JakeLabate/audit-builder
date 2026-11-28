@@ -8,7 +8,7 @@ export default function Chrome({ session, children }: { session: Session; childr
     <>
       <header className="top">
         <Link className="brandmark" to="/">
-          AuditBuilder<span>Findings</span>
+          AuditBuilder
         </Link>
         {/* Below 760px these move into the account menu, which is the only
             thing on the header with room for them. */}
