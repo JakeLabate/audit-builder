@@ -1700,3 +1700,29 @@ input, select, textarea { font-size: 16px }
   .dlv-a-open,.dlv-a-copy{min-height:40px;padding:0 14px;font-size:14px}
   .dlv-x{top:6px;right:6px;width:40px;height:40px;font-size:22px}
 }
+
+/* ------------------------------------------------ MCP consent and connections */
+.consent{text-align:left;max-width:440px}
+.consent-mark{font-family:var(--disp);font-weight:700;font-size:16px;letter-spacing:-.02em;color:var(--ink);margin-bottom:28px}
+.consent h1{font-size:26px}
+.consent p{margin:0 0 18px}
+.consent p b{color:var(--ink);font-weight:600}
+.consent-logo{width:44px;height:44px;border-radius:10px;object-fit:contain;border:1px solid var(--line);margin-bottom:14px;background:#fff}
+.consent-wait{color:var(--muted)}
+.consent-ws{margin:0 0 18px}
+.consent-ws label,.consent-ws span{display:block;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--label);margin-bottom:6px}
+.consent-ws select{width:100%;padding:9px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface);font:inherit;color:var(--ink)}
+.consent-ws.one{display:flex;align-items:baseline;gap:10px;padding:10px 12px;background:var(--wash);border:1px solid var(--line)}
+.consent-ws.one span{margin:0}
+.consent-ws.one b{color:var(--ink);font-weight:600}
+.consent-can{margin:0 0 16px;padding:0;list-style:none;border-top:1px solid var(--line)}
+.consent-can li{padding:9px 0 9px 22px;border-bottom:1px solid var(--line);color:var(--ink-2);font-size:14px;position:relative}
+.consent-can li:before{content:'';position:absolute;left:3px;top:15px;width:9px;height:5px;border-left:2px solid var(--teal);border-bottom:2px solid var(--teal);transform:rotate(-45deg)}
+.consent .consent-note{font-size:13px}
+.consent-acts{display:flex;gap:10px;justify-content:flex-end}
+.consent-acts .btn{min-width:110px}
+.consent .consent-back{font-size:12.5px;margin:14px 0 0;text-align:right}
+.conn-name{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
+.routelist+.doc-p{margin-top:14px}
+.conn-name img{width:18px;height:18px;border-radius:4px;object-fit:contain}
+.doc-api{border-top:2px solid var(--ink);padding-top:30px;margin-top:56px}

@@ -6,10 +6,22 @@
 import { ApiError, insert, patch, remove, rpc, scoped, type Env } from './db'
 import { isCategoryPath, nextRefFor } from '../../src/lib/taxonomy'
 
-export interface Ctx { org: string; scopes: string[]; keyId: string }
+/** Who is calling. A REST call carries a key; an MCP call carries a person,
+ *  signed in through an MCP client, so it has a user and a client instead. */
+export interface Ctx {
+  org: string
+  scopes: string[]
+  keyId: string
+  userId?: string
+  clientId?: string
+}
 
 const needWrite = (ctx: Ctx) => {
-  if (!ctx.scopes.includes('write')) throw new ApiError(403, 'This key is read only.')
+  if (!ctx.scopes.includes('write')) {
+    throw new ApiError(403, ctx.userId
+      ? 'You are a viewer in this workspace, so you can read but not change anything.'
+      : 'This key is read only.')
+  }
 }
 
 const cap = (env: Env, n: unknown) =>

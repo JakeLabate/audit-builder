@@ -16,7 +16,7 @@ export const PAGES = [
   { to: '/', label: 'Brands', end: true },
   { to: '/templates', label: 'Templates' },
   { to: '/guide', label: 'How it works' },
-  { to: '/api', label: 'API and MCP' },
+  { to: '/mcp', label: 'MCP' },
   { to: '/team', label: 'People' },
 ]
 

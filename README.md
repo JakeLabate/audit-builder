@@ -67,12 +67,19 @@ npm run dev
    `https://www.googleapis.com/auth/drive.file`. Sheets export is hidden until
    `VITE_GOOGLE_CLIENT_ID` is set, so the app works without it.
 
+## MCP and the API
+
+The worker in `api/` serves both. An MCP client signs in with the person's
+AuditBuilder account through Supabase's OAuth 2.1 server and approves the
+connection on `/oauth/consent`; the REST API takes a workspace key. Setup and
+the full flow are in `api/README.md`.
+
 ## Layout
 
 ```
 src/
   lib/       supabase client, types mirroring the schema, the score formula, data access
-  pages/     Login, Brands, BrandView, AuditView, Templates
+  pages/     Login, Brands, BrandView, AuditView, Templates, McpPage (MCP, then the REST API), OAuthConsent
   components/ Chrome, FindingEditor, Checklist, ChecklistBuilder
   export/    serialize (JSON + CSV), pdf, print.css, sheets
 supabase/    schema notes and how to pull the migrations

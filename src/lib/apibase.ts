@@ -7,6 +7,7 @@ export interface ApiIndex {
   name: string
   auth: string
   mcp: string
+  mcp_auth?: string
   render?: string
   scopes?: string[]
   tools?: { name: string; description: string }[]

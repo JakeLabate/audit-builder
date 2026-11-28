@@ -223,8 +223,9 @@ export default function Guide() {
       <section className="doc-s">
         <h2>Doing it programmatically</h2>
         <p className="doc-p">
-          Everything above is available over REST and over MCP, driven by the same handlers, so an
-          agent can write findings that obey exactly the same rules. See <Link to="/api">API and MCP</Link>.
+          Everything above is available over MCP and over REST, driven by the same handlers, so an
+          agent can write findings that obey exactly the same rules. An MCP client signs in with
+          your AuditBuilder account; the REST API takes a key. See <Link to="/mcp">MCP</Link>.
         </p>
       </section>
 

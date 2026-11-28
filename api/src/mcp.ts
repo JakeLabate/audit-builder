@@ -1,7 +1,8 @@
 /**
  * The MCP surface. Streamable HTTP, JSON-RPC 2.0, stateless: every request
- * carries the API key, so there is no session to keep and the worker stays
- * free to run anywhere.
+ * carries the access token the client got when the person signed in (see
+ * oauth.ts), so there is no session to keep and the worker stays free to run
+ * anywhere.
  *
  * Tools are thin wrappers over the same handlers the REST routes use. The
  * only thing this file adds is the schema an agent needs to call them.

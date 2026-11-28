@@ -34,7 +34,7 @@ export default function Account() {
         <h2>Taking your work with you</h2>
         <p className="doc-p">
           Every audit exports to a document and a spreadsheet from the audit page, at any
-          time, with no export limit. The <Link to="/api">API</Link> returns a whole audit as
+          time, with no export limit. The <Link to="/mcp#api">API</Link> returns a whole audit as
           JSON, CSV or Markdown in one call. Do that before you delete anything: deletion
           here is immediate and there is no recovery.
         </p>

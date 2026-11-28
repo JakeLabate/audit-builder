@@ -1,27 +1,29 @@
 /**
  * AuditBuilder API.
  *
- *   /v1/*   a REST surface over brands, audits, findings and exhibits
- *   /mcp    the same handlers exposed as MCP tools
+ *   /mcp    MCP tools. Signs in with an AuditBuilder account (oauth.ts)
+ *   /v1/*   a REST surface over brands, audits, findings and exhibits, by key
  *
- * One auth path for both: a bearer key, hashed and looked up, resolving to an
- * org and a scope list. The two surfaces share every handler, so they cannot
- * drift apart.
+ * Two ways in, one set of handlers: both surfaces resolve to a workspace and
+ * a permission level and then call identical code, so they cannot drift apart.
  */
 import { ApiError, rpc, type Env } from './db'
 import { audits, brands, examples, exports_, findings, schema, type Ctx } from './resources'
 import { handleMcp, TOOLS as MCP_TOOLS } from './mcp'
+import { authenticateMcp, protectedResource, SignInRequired } from './oauth'
 import { handleRender } from './render'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
   'Access-Control-Allow-Headers': 'Authorization,Content-Type,Mcp-Session-Id,MCP-Protocol-Version',
+  // A browser based MCP client has to read this to find the sign in.
+  'Access-Control-Expose-Headers': 'WWW-Authenticate,Mcp-Session-Id',
   'Access-Control-Max-Age': '86400',
 }
 
 export default {
-  async fetch(req: Request, env: Env): Promise<Response> {
+  async fetch(req: Request, env: Env, exec: ExecutionContext): Promise<Response> {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
 
     const url = new URL(req.url)
@@ -29,6 +31,28 @@ export default {
 
     if (path === '/' || path === '/v1') return json(index(url.origin))
     if (path === '/health') return json({ ok: true })
+
+    // Where an MCP client learns how to sign in. Public by definition. Served
+    // at the root form and the path form, since clients try both.
+    if (path === '/.well-known/oauth-protected-resource'
+      || path === '/.well-known/oauth-protected-resource/mcp') {
+      return json(protectedResource(url.origin, env))
+    }
+
+    if (path === '/mcp') {
+      try {
+        const ctx = await authenticateMcp(req, env, (p) => exec.waitUntil(p.catch(() => {})))
+        const res = await handleMcp(req, env, ctx)
+        for (const [k, v] of Object.entries(CORS)) res.headers.set(k, v)
+        return res
+      } catch (e) {
+        if (e instanceof SignInRequired) {
+          return json({ error: e.message }, 401, { 'WWW-Authenticate': e.header(url.origin) })
+        }
+        if (e instanceof ApiError) return json({ error: e.message }, e.status)
+        return json({ error: (e as Error).message }, 500)
+      }
+    }
 
     // The app in a browser has a Supabase session, not an API key, so this one
     // route authenticates itself and never reaches the key gate below.
@@ -45,11 +69,6 @@ export default {
 
     try {
       const ctx = await authenticate(req, env)
-      if (path === '/mcp') {
-        const res = await handleMcp(req, env, ctx)
-        for (const [k, v] of Object.entries(CORS)) res.headers.set(k, v)
-        return res
-      }
       return json(await route(req, env, ctx, path, url.searchParams))
     } catch (e) {
       if (e instanceof ApiError) return json({ error: e.message }, e.status)
@@ -60,6 +79,7 @@ export default {
 
 /* ---------------------------------------------------------------- auth */
 
+/** REST only. MCP signs in instead: see oauth.ts. */
 async function authenticate(req: Request, env: Env): Promise<Ctx> {
   const raw = req.headers.get('Authorization') ?? ''
   const key = raw.replace(/^Bearer\s+/i, '').trim()
@@ -144,6 +164,7 @@ const index = (origin: string) => ({
   name: 'AuditBuilder API',
   auth: 'Authorization: Bearer ab_live_...',
   mcp: `${origin}/mcp`,
+  mcp_auth: 'OAuth 2.1. Sign in with your AuditBuilder account from the MCP client; no key.',
   render: `${origin}/render`,
   scopes: ['read', 'write'],
   // Listed here, unauthenticated, so the docs page in the app is generated
@@ -175,8 +196,8 @@ const index = (origin: string) => ({
   ],
 })
 
-const json = (b: unknown, status = 200) =>
+const json = (b: unknown, status = 200, extra: Record<string, string> = {}) =>
   new Response(JSON.stringify(b, null, 2), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
+    headers: { 'Content-Type': 'application/json', ...CORS, ...extra },
   })
