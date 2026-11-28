@@ -2,8 +2,24 @@
 
 Two surfaces over the same handlers:
 
-- `/mcp` MCP, Streamable HTTP, stateless. Signs in with an AuditBuilder account.
+- MCP, Streamable HTTP, stateless, at `https://mcp.jakelabate.com/auditbuilder`.
+  Signs in with an AuditBuilder account.
 - `/v1/*` REST. Takes an API key.
+
+## The MCP address
+
+`https://mcp.jakelabate.com/auditbuilder` is the address people add. The
+`mcp` worker that owns `mcp.jakelabate.com` (in the Website repo,
+`scripts/mcp-server/`) has a service binding to this worker and passes two
+paths through unchanged:
+
+- `/auditbuilder`, the endpoint
+- `/.well-known/oauth-protected-resource/auditbuilder`, its sign in metadata
+
+A browser that opens the address is sent to the MCP page in the app. This
+worker answers the same endpoint at its own `/mcp` too, so a client connected
+before the move keeps working. Each address gets metadata naming itself as
+the resource, which is what a client checks.
 
 ## Deploy
 
@@ -29,8 +45,8 @@ There is no key. An MCP client signs the person in through Supabase's OAuth
 2.1 server, with the same account they use in the app, and the client sends
 the access token it gets back. `src/oauth.ts` is the whole resource server:
 
-1. A request to `/mcp` without a valid token gets a `401` with
-   `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp"`.
+1. A request without a valid token gets a `401` with
+   `WWW-Authenticate: Bearer resource_metadata="https://mcp.jakelabate.com/.well-known/oauth-protected-resource/auditbuilder"`.
 2. The client reads that metadata (RFC 9728), which names Supabase Auth
    (`https://vvekkbboqqkxnlpmxazh.supabase.co/auth/v1`) as the authorization
    server, reads Supabase's own discovery document, and registers itself the
@@ -40,14 +56,14 @@ the access token it gets back. `src/oauth.ts` is the whole resource server:
    out, the app signs them in first and returns them there. They pick a
    workspace and press Allow. The page records the workspace in
    `mcp_connections` and approves the request.
-4. The client gets a token and calls `/mcp` with it. The worker checks the
+4. The client gets a token and calls the endpoint with it. The worker checks the
    token with Supabase (`/auth/v1/user`, which also catches a revoked
    connection), reads `client_id` from it, and resolves the workspace from
    `mcp_connections`, falling back to the only workspace when there is one.
 
 The connection acts as the person: owners and editors read and write, viewers
 read. A plain app session token is refused, since it carries no `client_id`.
-An old `ab_live_` key sent to `/mcp` is refused with a message saying to
+An old `ab_live_` key sent to the endpoint is refused with a message saying to
 reconnect without it.
 
 People see and disconnect their clients on the MCP page in the app.
@@ -70,8 +86,8 @@ the OAuth server needs for `openid`.
 ### Connecting
 
 - Claude: Settings > Connectors > Add custom connector, paste
-  `https://audit-api.jake-a-labate.workers.dev/mcp`, Connect, sign in, Allow.
-- Claude Code: `claude mcp add --transport http auditbuilder https://audit-api.jake-a-labate.workers.dev/mcp`,
+  `https://mcp.jakelabate.com/auditbuilder`, Connect, sign in, Allow.
+- Claude Code: `claude mcp add --transport http auditbuilder https://mcp.jakelabate.com/auditbuilder`,
   then `/mcp` to sign in.
 - Anything else that supports MCP authorization: the URL, and no
   Authorization header.

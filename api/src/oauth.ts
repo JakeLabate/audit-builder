@@ -18,13 +18,25 @@
 import { ApiError, type Env } from './db'
 import type { Ctx } from './resources'
 
-/** Where the metadata lives, for a resource at `${origin}/mcp`. */
-export const resourceMetadataUrl = (origin: string) =>
-  `${origin}/.well-known/oauth-protected-resource/mcp`
+/** The public address of the MCP endpoint. The mcp worker on
+ *  mcp.jakelabate.com passes /auditbuilder through to this worker unchanged,
+ *  over a service binding, so a request for it arrives here with that host. */
+export const MCP_ADDRESS = 'https://mcp.jakelabate.com/auditbuilder'
 
-export function protectedResource(origin: string, env: Env) {
+/** The paths the endpoint answers on: /auditbuilder as above, and /mcp, this
+ *  worker's own address, kept for clients connected before the move. */
+export const MCP_PATHS = ['/auditbuilder', '/mcp']
+
+export const WELL_KNOWN = '/.well-known/oauth-protected-resource'
+
+/** Where the metadata lives, for a resource at `${origin}${path}`. */
+export const resourceMetadataUrl = (origin: string, path: string) => `${origin}${WELL_KNOWN}${path}`
+
+/** The resource is the address the client used, so it matches what the
+ *  client asked for whichever of the two that was. */
+export function protectedResource(resource: string, env: Env) {
   return {
-    resource: `${origin}/mcp`,
+    resource,
     authorization_servers: [`${env.SUPABASE_URL}/auth/v1`],
     bearer_methods_supported: ['header'],
     scopes_supported: ['openid', 'email', 'profile'],
@@ -38,8 +50,8 @@ export class SignInRequired extends ApiError {
   constructor(message: string, readonly invalid = false) {
     super(401, message)
   }
-  header(origin: string): string {
-    const bits = [`resource_metadata="${resourceMetadataUrl(origin)}"`]
+  header(origin: string, path: string): string {
+    const bits = [`resource_metadata="${resourceMetadataUrl(origin, path)}"`]
     if (this.invalid) bits.unshift('error="invalid_token"')
     return `Bearer ${bits.join(', ')}`
   }
