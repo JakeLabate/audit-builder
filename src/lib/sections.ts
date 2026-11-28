@@ -1,4 +1,5 @@
 import type { Audit } from './types'
+import { auditScopeOf, kpisOf } from './overview'
 
 /**
  * The report's table of parts. Which sections a deliverable contains, and in
@@ -7,7 +8,7 @@ import type { Audit } from './types'
  */
 
 export type SectionKey =
-  | 'cover' | 'summary' | 'contents' | 'method' | 'coverage' | 'findings' | 'roadmap' | 'appendix'
+  | 'cover' | 'brief' | 'summary' | 'contents' | 'method' | 'coverage' | 'findings' | 'roadmap' | 'appendix'
 
 /** What a section may need to know beyond the audit row to say whether it
  *  has anything to print. */
@@ -31,8 +32,14 @@ export const CATALOGUE: {
     what: 'Client name, audit title, the headline counts, and your byline. Carries the brand kit.',
   },
   {
+    key: 'brief', name: 'The brief', pages: 1,
+    what: 'The question the audit answers, the objective, and the numbers it is judged on with where each stood at the start. From the Overview.',
+    needs: (a) => (a.question?.trim() || a.objective?.trim() || kpisOf(a).some((k) => k.name.trim()) ? null
+      : "This audit has no brief yet, so the section is left out. Fill in Brief on the audit's Overview."),
+  },
+  {
     key: 'summary', name: 'What we found', pages: 1,
-    what: 'The shape of the audit before any detail: findings by category, and by band, effort, owner and metric at risk wherever those are filled in.',
+    what: 'The shape of the audit before any detail: the written summary and themes from the Overview, then findings by category, and by band, effort, owner and metric at risk wherever those are filled in.',
   },
   {
     key: 'contents', name: 'Contents', pages: 1,
@@ -40,9 +47,9 @@ export const CATALOGUE: {
   },
   {
     key: 'method', name: 'Method and scope', pages: 1,
-    what: 'What was covered, the tools the audit declared, and what it could not see. Explains the priority score when findings are scored.',
-    needs: (a) => (a.scope_note || (a.sources ?? []).length ? null
-      : 'This audit has no scope note and no declared sources, so the section would print almost empty.'),
+    what: 'What was covered and left out, the sources the audit declared, and what it could not see. From the Overview. Explains the priority score when findings are scored.',
+    needs: (a) => (a.scope_note || (a.sources ?? []).length || Object.values(auditScopeOf(a)).some((v) => v.length) ? null
+      : 'This audit has no scope and no declared sources, so the section would print almost empty. Fill in Scope on the Overview.'),
   },
   {
     key: 'coverage', name: 'What was checked', pages: 1,
@@ -66,6 +73,7 @@ export const CATALOGUE: {
 
 export const DEFAULT_SECTIONS: SectionChoice[] = [
   { key: 'cover', on: true },
+  { key: 'brief', on: true },
   { key: 'summary', on: true },
   { key: 'contents', on: true },
   { key: 'method', on: true },
@@ -86,8 +94,15 @@ export function sectionsOf(audit: Audit | null): SectionChoice[] {
   const known = new Set(CATALOGUE.map((c) => c.key))
   const kept = raw.filter((s) => s && known.has(s.key))
   const seen = new Set(kept.map((s) => s.key))
-  const missing = CATALOGUE.filter((c) => !seen.has(c.key)).map((c) => ({ key: c.key, on: false }))
-  const all = [...kept, ...missing]
+  // Each missing section goes in after the section the catalogue puts before
+  // it, so it is in a sensible place when someone switches it on.
+  const all = [...kept]
+  CATALOGUE.forEach((c, i) => {
+    if (seen.has(c.key)) return
+    const prev = CATALOGUE.slice(0, i).reverse().find((p) => all.some((s) => s.key === p.key))
+    const at = prev ? all.findIndex((s) => s.key === prev.key) + 1 : 0
+    all.splice(at, 0, { key: c.key, on: false })
+  })
 
   // The cover is the first page or it is not a cover.
   const cover = all.find((s) => s.key === 'cover')

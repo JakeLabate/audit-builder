@@ -47,6 +47,12 @@ export default function Guide() {
           you could not see. A <b>finding</b> is one claim.
         </p>
         <p className="doc-p">
+          Each audit opens on its <b>Overview</b>: the question it answers, the numbers it is judged
+          on and where they stood at the start, what it covers and leaves out, and what it concluded
+          across its findings, grouped into themes. The brief and the summary print at the front of
+          the document, and a finding that strays outside the scope is flagged where it is edited.
+        </p>
+        <p className="doc-p">
           The registry is the part people skip and then miss. Putting templates, components, owners
           and metrics on the brand rather than typing them per finding is what makes the register
           sortable and the roadmap addable. Categories are different: they are one universal,
@@ -215,7 +221,7 @@ export default function Guide() {
           <li>Open the sample audit and read one finding all the way through. That is the shape everything else has to fit.</li>
           <li>Run Export on it. You get a real PDF and a real Sheet, and the whole point of the app is visible in about a minute.</li>
           <li>Make a brand for a real client and fill in the registry properly. It is the only tedious part and it pays for itself immediately.</li>
-          <li>Start an audit, pick a mode, and write one finding end to end before writing ten badly.</li>
+          <li>Start an audit, fill in its Brief and Scope on the Overview, pick a mode, and write one finding end to end before writing ten badly.</li>
           <li>Delete the sample whenever it stops being useful.</li>
         </ol>
       </section>

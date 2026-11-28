@@ -140,6 +140,23 @@ export interface Audit {
   /** The default evidence window for every finding in this audit. */
   evidence_from: string | null
   evidence_to: string | null
+
+  // The overview: what the audit is for, what it covers, and what it concluded.
+  // Read the json columns through overview.ts, which repairs partial values.
+  /** The question the audit answers, in the client's terms. */
+  question?: string | null
+  /** The business outcome the work is for. */
+  objective?: string | null
+  commissioned_by?: string | null
+  due_on?: string | null
+  /** The numbers it is judged on, each with its baseline. */
+  kpis?: unknown
+  /** What it covers. A finding outside it is flagged. */
+  scope?: unknown
+  /** The executive summary, written by a person. */
+  summary?: string | null
+  /** Root causes the findings group under. */
+  themes?: unknown
   created_at: string
   updated_at: string
 }

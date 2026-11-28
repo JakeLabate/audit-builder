@@ -1736,3 +1736,48 @@ input, select, textarea { font-size: 16px }
 .routelist+.doc-p{margin-top:14px}
 .conn-name img{width:18px;height:18px;border-radius:4px;object-fit:contain}
 .doc-api{border-top:2px solid var(--ink);padding-top:30px;margin-top:56px}
+
+/* ---------------------------------------------------------------- overview */
+.ov-lede{font-size:14px;color:var(--muted);margin:4px 0 22px;max-width:64ch;line-height:1.5}
+.ov-part{scroll-margin-top:16px}
+.ov-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.ov-row{display:grid;gap:8px;align-items:center}
+.ov-row.kpi{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto}
+.ov-row.src{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) 130px auto}
+.ov-row input,.ov-row select,.ov-add input,.ov-theme input,.ov-theme textarea,.ov-base input,.ov-pick{
+  width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);
+  padding:7px 10px;font:inherit;font-size:14px;color:var(--ink)}
+.ov-row input:focus,.ov-row select:focus,.ov-add input:focus,.ov-theme input:focus,.ov-theme textarea:focus,.ov-base input:focus{outline:none;border-color:var(--teal)}
+.ov-add{display:flex;gap:8px;max-width:420px}
+.ov-add input{flex:1}
+.ov-none{font-size:13.5px;color:var(--muted);margin:0 0 12px;max-width:62ch;line-height:1.5}
+.ov-count{font-size:13px;color:var(--muted);margin:10px 0 4px}
+.ov-warn{font-size:12.5px;color:#8A5A00;margin:6px 0 0}
+.ov-flags{margin:6px 0 8px;padding-left:18px}
+.ov-flags li{margin:2px 0}
+.linkish{border:0;background:none;padding:0;font:inherit;font-family:var(--mono);font-size:12px;color:var(--teal-d);
+  text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.ov-base{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;background:var(--bg)}
+.ov-base-n{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:10px}
+.ov-base-n b{font-family:var(--disp);font-weight:600;font-size:15px;color:var(--ink)}
+.ov-base-n span{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.ov-base-f{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr);gap:0 10px}
+.ov-base-f .fld{margin-bottom:0}
+.ov-base-f label{font-size:12px}
+.ov-theme{border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:10px;background:var(--bg)}
+.ov-theme-h{display:flex;gap:8px;margin-bottom:8px}
+.ov-theme-h input{flex:1;font-family:var(--disp);font-weight:600;font-size:15px}
+.ov-theme textarea{min-height:52px;resize:vertical;line-height:1.5;margin-bottom:8px}
+.ov-members{align-items:center;margin-bottom:0}
+.ov-pick{width:auto;max-width:100%;font-size:13px;padding:4px 8px}
+.ov-cats{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px 18px}
+.ov-cats li{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:4px 0;font-size:13.5px}
+.ov-cats b{font-family:var(--mono);font-weight:500;font-size:12.5px}
+@media (max-width:760px){
+  .ov-row.kpi,.ov-row.src{grid-template-columns:1fr}
+  .ov-base-f{grid-template-columns:1fr 1fr}
+  .ov-base-f .fld:last-child{grid-column:1/-1}
+  .ov-row input,.ov-row select,.ov-add input,.ov-theme input,.ov-theme textarea,.ov-base input,.ov-pick{font-size:16px}
+}
+/* A field's add button is a button, not a full width bar. */
+.ov-part .grp-b .fld>.btn.sm{align-self:flex-start}

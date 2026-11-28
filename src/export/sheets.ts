@@ -1,6 +1,7 @@
 import type { Audit, Brand, FindingFull, PriorityBand } from '../lib/types'
 import { resolveColumns, withRefs, type SheetCol } from '../lib/sheetcols'
 import { clientFindings } from '../lib/depth'
+import { auditScopeOf, baselineText, kpisOf, themesOf } from '../lib/overview'
 
 /**
  * Google Sheets export.
@@ -206,6 +207,26 @@ export async function exportToSheets(
     ['Any number asserted in "What it costs" states where it came from. Nothing is published that cannot.'],
   ]
 
+  // The written summary and the themes from the Overview, under the counts.
+  // Rows are recorded as they are added so they can be formatted after.
+  const sumHeads: number[] = []
+  const sumParas: number[] = []
+  if (audit.summary?.trim()) {
+    summary.push([])
+    sumHeads.push(summary.length); summary.push(['In short'])
+    for (const para of audit.summary.trim().split(/\n\s*\n/)) { sumParas.push(summary.length); summary.push([para.trim()]) }
+  }
+  const refIn = new Map(ordered.map((f) => [f.id, f.ref]))
+  const themes = themesOf(audit).filter((t) => t.title.trim())
+  if (themes.length) {
+    summary.push([])
+    sumHeads.push(summary.length); summary.push(['Themes'])
+    for (const t of themes) {
+      summary.push([t.title.trim(), t.finding_ids.map((id) => refIn.get(id)).filter(Boolean).join(', ')])
+      if (t.note.trim()) { sumParas.push(summary.length); summary.push([t.note.trim()]) }
+    }
+  }
+
   const roadmap: (string | number)[][] = [['Wave', 'Ref', 'Finding', 'Priority', 'Owner', 'Effort, days']]
   const waves = [...new Set(ordered.map((f) => f.wave ?? 0))].sort((a, b) => a - b)
   for (const w of waves) {
@@ -222,22 +243,56 @@ export async function exportToSheets(
   }
 
   const sources = Array.isArray(audit.sources) ? audit.sources : []
-  const method: (string | number)[][] = [
-    ['Method and scope'],
-    [],
-    ['What was examined'],
-    [audit.scope_note ?? 'Not stated.'],
-    [],
-    ['Sources'],
-    ['Tool or dataset', 'Window', 'Confidence'],
-    ...(sources.length
-      ? sources.map((s) => [s.tool ?? '', s.window ?? '', TITLE_CASE(s.confidence ?? '')])
-      : [['None declared', '', '']]),
-    [],
-    ['What was not available'],
-    [audit.gaps ?? 'Nothing material was unavailable.'],
-    [],
-    ['How priority is computed'],
+  // Built row by row, so each heading's row is known for formatting however
+  // many rows the brief and the scope turn out to need.
+  const method: (string | number)[][] = [['Method and scope'], []]
+  const methodHeads: number[] = []
+  const head = (t: string) => { methodHeads.push(method.length); method.push([t]) }
+
+  const kpis = kpisOf(audit).filter((k) => k.name.trim())
+  if (audit.question?.trim() || audit.objective?.trim() || kpis.length) {
+    head('The brief')
+    if (audit.question?.trim()) method.push([audit.question.trim()])
+    if (audit.objective?.trim()) method.push([audit.objective.trim()])
+    const who = [audit.commissioned_by?.trim() ? `Commissioned by ${audit.commissioned_by.trim()}` : '',
+      audit.due_on ? `Due ${audit.due_on}` : ''].filter(Boolean).join('. ')
+    if (who) method.push([who])
+    method.push([])
+    if (kpis.length) {
+      head('Judged on')
+      method.push(['Number', 'Where it stood', 'As of, and source'])
+      for (const k of kpis) {
+        method.push([k.name, k.baseline == null ? 'Not measured' : baselineText(k), [k.as_of, k.source].filter(Boolean).join(', ')])
+      }
+      method.push([])
+    }
+  }
+
+  const sc = auditScopeOf(audit)
+  head('What was examined')
+  for (const [label, v] of [['Domains', sc.hosts], ['Markets', sc.markets], ['Page types', sc.templates], ['Devices', sc.devices]] as [string, string[]][]) {
+    if (v.length) method.push([label, v.join(', ')])
+  }
+  const scoped = sc.hosts.length + sc.markets.length + sc.templates.length + sc.devices.length > 0
+  if (audit.scope_note?.trim() || !scoped) method.push([audit.scope_note?.trim() || 'Not stated.'])
+  method.push([])
+  if (sc.excluded.length) {
+    head('What was left out')
+    for (const x of sc.excluded) method.push([x])
+    method.push([])
+  }
+
+  head('Sources')
+  method.push(['Tool or dataset', 'Window', 'Confidence'])
+  method.push(...(sources.length
+    ? sources.map((s) => [s.tool ?? '', s.window ?? '', TITLE_CASE(s.confidence ?? '')])
+    : [['None declared', '', '']]))
+  method.push([])
+  head('What was not available')
+  method.push([audit.gaps ?? 'Nothing material was unavailable.'])
+  method.push([])
+  head('How priority is computed')
+  method.push(
     ['score = 3 x (severity x reach x confidence x leverage) / sqrt(effort days) x risk factor'],
     ['Effort sits under a square root, so a fix taking four times as long is penalised twice, not four times. Without that the register would recommend nothing but trivia.'],
     ['The band is a position inside this audit, not a fixed number: P1 is the most urgent work here rather than a score above a threshold. Findings that score the same always share a band. The score column keeps this audit comparable with another.'],
@@ -247,7 +302,7 @@ export async function exportToSheets(
     ['P2', 'Next 25%', 'Scheduled work. Real impact, real effort.'],
     ['P3', 'Next 30%', 'Worth doing when the surrounding work is open.'],
     ['P4', 'The rest', 'Monitor. Not worth acting on alone.'],
-  ]
+  )
 
   await api(token, `https://sheets.googleapis.com/v4/spreadsheets/${id}/values:batchUpdate`, {
     method: 'POST',
@@ -353,6 +408,11 @@ export async function exportToSheets(
     { mergeCells: { range: { sheetId: SUM, startRowIndex: 13, endRowIndex: 14, startColumnIndex: 0, endColumnIndex: 6 }, mergeType: 'MERGE_ALL' } },
     { mergeCells: { range: { sheetId: SUM, startRowIndex: 14, endRowIndex: 15, startColumnIndex: 0, endColumnIndex: 6 }, mergeType: 'MERGE_ALL' } },
     { mergeCells: { range: { sheetId: SUM, startRowIndex: 15, endRowIndex: 16, startColumnIndex: 0, endColumnIndex: 6 }, mergeType: 'MERGE_ALL' } },
+    ...sumHeads.map((r) => ({ repeatCell: { range: { sheetId: SUM, startRowIndex: r, endRowIndex: r + 1 }, cell: { userEnteredFormat: { textFormat: { bold: true, foregroundColor: INK } } }, fields: 'userEnteredFormat.textFormat' } })),
+    ...sumParas.flatMap((r) => [
+      { mergeCells: { range: { sheetId: SUM, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 6 }, mergeType: 'MERGE_ALL' } },
+      { repeatCell: { range: { sheetId: SUM, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 1 }, cell: { userEnteredFormat: { wrapStrategy: 'WRAP', verticalAlignment: 'TOP', textFormat: { foregroundColor: INK_2, fontSize: 10 } } }, fields: 'userEnteredFormat(wrapStrategy,verticalAlignment,textFormat)' } },
+    ]),
   ])
 
   // Findings: the register.
@@ -424,7 +484,7 @@ export async function exportToSheets(
     { updateDimensionProperties: { range: { sheetId: METH, dimension: 'COLUMNS', startIndex: 1, endIndex: 3 }, properties: { pixelSize: 220 }, fields: 'pixelSize' } },
     { repeatCell: { range: { sheetId: METH, startRowIndex: 0, endRowIndex: method.length, startColumnIndex: 0, endColumnIndex: 3 }, cell: { userEnteredFormat: { wrapStrategy: 'WRAP', verticalAlignment: 'TOP', textFormat: { fontSize: 10, foregroundColor: INK_2 } } }, fields: 'userEnteredFormat(wrapStrategy,verticalAlignment,textFormat)' } },
     { repeatCell: { range: { sheetId: METH, startRowIndex: 0, endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 16, foregroundColor: INK } } }, fields: 'userEnteredFormat.textFormat' } },
-    ...[2, 5, 9, 12].map((r) => ({
+    ...methodHeads.map((r) => ({
       repeatCell: {
         range: { sheetId: METH, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 3 },
         cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColor: TEAL } } },

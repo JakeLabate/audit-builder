@@ -119,7 +119,10 @@ export const TOOLS: Tool[] = [
   },
   {
     name: 'get_audit',
-    description: 'One audit, including its declared sources, scope note and gaps.',
+    description:
+      'One audit, including its overview: the brief (question, objective, commissioned_by, due_on), ' +
+      'kpis with their baselines, the scope lists, the executive summary and themes, ' +
+      'and its declared sources, scope note and gaps.',
     inputSchema: params({ audit_id: str('') }, ['audit_id']),
     run: (env, ctx, a) => audits.get(env, ctx, String(a.audit_id)),
   },
@@ -133,18 +136,47 @@ export const TOOLS: Tool[] = [
       title: str(''),
       mode: { type: 'string', enum: ['manual', 'logic'] },
       kind: str('What the cover calls this document. Defaults to SEO Audit.'),
-      scope_note: str(''),
+      scope_note: str('The narrative of what was covered. The lists go in scope.'),
       sources: {
         type: 'array',
         description: 'Tools and windows this audit is allowed to cite: {tool, window, confidence}.',
         items: params({ tool: str(''), window: str(''), confidence: str('') }),
+      },
+      question: str('The question the audit answers, in the client\'s terms.'),
+      objective: str('The business outcome the work is for.'),
+      commissioned_by: str('Who asked for it.'),
+      due_on: str('When the deliverable is due, YYYY-MM-DD.'),
+      kpis: {
+        type: 'array',
+        description:
+          'The numbers the audit is judged on: {id, name, unit, baseline, as_of, source}. ' +
+          'Set baseline only from a figure the person gave, with its date and source. Never estimate one.',
+        items: params({
+          id: str(''), name: str(''), unit: str(''), baseline: { type: ['number', 'null'] },
+          as_of: str('YYYY-MM-DD'), source: str(''),
+        }),
+      },
+      scope: {
+        type: 'object',
+        description: 'What it covers, each a list of strings: hosts, markets, templates, devices, excluded. A finding outside it is flagged.',
+        properties: {
+          hosts: { type: 'array', items: { type: 'string' } },
+          markets: { type: 'array', items: { type: 'string' } },
+          templates: { type: 'array', items: { type: 'string' } },
+          devices: { type: 'array', items: { type: 'string' } },
+          excluded: { type: 'array', items: { type: 'string' } },
+        },
       },
     }, ['brand_id', 'title']),
     run: (env, ctx, a) => audits.create(env, ctx, a),
   },
   {
     name: 'update_audit',
-    description: 'Change an audit. Moving status to delivered freezes every finding reference.',
+    description:
+      'Change an audit. Moving status to delivered freezes every finding reference. ' +
+      'The overview fields are patched here too: question, objective, commissioned_by, due_on, kpis, scope, ' +
+      'summary (the executive summary) and themes ({id, title, note, finding_ids}, a finding in one theme at most). ' +
+      'Send a json field whole: kpis, scope and themes are replaced, not merged.',
     inputSchema: params({ audit_id: str(''), patch: { type: 'object' } }, ['audit_id', 'patch']),
     run: (env, ctx, a) => audits.update(env, ctx, String(a.audit_id), a.patch as Json),
   },

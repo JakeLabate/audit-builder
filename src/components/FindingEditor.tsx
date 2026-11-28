@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { kpisOf, outOfScope } from '../lib/overview'
+import { registryOf } from '../lib/derive'
 import type {
   AcceptanceCheck, AffectedParty, Audit, Brand, CheckKind, Example, FindingFull, FindingHistory,
 } from '../lib/types'
@@ -262,6 +264,12 @@ export default function FindingEditor({
       {issues.map((m, i) => (
         <div className="issue" key={i}><b>Incomplete</b>{m}</div>
       ))}
+      {(() => {
+        const why = outOfScope(f, audit)
+        return why.length > 0 && (
+          <div className="issue"><b>Outside this audit's scope</b>{why.join('; ')}. Widen the scope on the Overview, or narrow the finding.</div>
+        )
+      })()}
 
       <G name="Identity" purpose="What this finding is. The category issues the reference, and the title is stated as a claim rather than a topic.">
         <F label="Category" required>
@@ -329,8 +337,12 @@ export default function FindingEditor({
               {IMPACT_TYPES.map((t) => <option key={t} value={t}>{IMPACT_LABEL[t]}</option>)}
             </select>
           </F>
-          <F label="Metric at risk">
-            <input value={f.metric_at_risk ?? ''} onChange={(e) => set('metric_at_risk', e.target.value)} />
+          <F label="Metric at risk" hint={kpisOf(audit).some((k) => k.name.trim()) ? 'Pick one of the numbers this audit is judged on, or type another.' : undefined}>
+            <input value={f.metric_at_risk ?? ''} list="fe-metrics" onChange={(e) => set('metric_at_risk', e.target.value)} />
+            <datalist id="fe-metrics">
+              {[...new Set([...kpisOf(audit).map((k) => k.name.trim()), ...registryOf(brand).metrics].filter(Boolean))]
+                .map((m) => <option key={m} value={m} />)}
+            </datalist>
           </F>
         </div>
         <div className="two">
