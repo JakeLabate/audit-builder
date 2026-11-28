@@ -7,6 +7,7 @@ import { clientFindings } from '../lib/depth'
 import { kindOf } from '../lib/kind'
 import { scopeOf } from '../lib/scope'
 import { coverage, groupByPath, type AuditCheck } from '../lib/checks'
+import { auditScopeOf, baselineText, kpisOf, themesOf } from '../lib/overview'
 
 /**
  * PDF export. The browser's own print engine does the rendering, so there is
@@ -301,8 +302,31 @@ function findingPage(
 const PILLAR_OF = (f: FindingFull) => categoryOf(f.pillar)
 const SUB_OF = (f: FindingFull) => (isCategoryPath(f.pillar) ? f.pillar.split('/')[1] : '')
 
+/** The brief: what the audit was for, and where its numbers stood at the start. */
+function briefPage(audit: Audit, running: string, folio: number): string {
+  const kpis = kpisOf(audit).filter((k) => has(k.name))
+  if (!has(audit.question) && !has(audit.objective) && !kpis.length) return ''
+  const who = [
+    has(audit.commissioned_by) ? `Commissioned by ${esc(audit.commissioned_by)}.` : '',
+    has(audit.due_on) ? `Due ${esc(day(audit.due_on))}.` : '',
+  ].filter(Boolean).join(' ')
+  // A number with no baseline still prints, as not measured: the reader should
+  // see what the work is judged on even where nobody recorded the start.
+  const dated = kpis.some((k) => has(k.as_of))
+  const rows = kpis.map((k) => `<tr><td class="sub">${esc(k.name)}${has(k.source) ? `<span class="kpisrc">${esc(k.source)}</span>` : ''}</td>
+      <td class="num">${esc(k.baseline == null ? 'Not measured' : baselineText(k))}</td>
+      ${dated ? `<td class="num">${esc(has(k.as_of) ? day(k.as_of) : '')}</td>` : ''}</tr>`)
+  const head = `<thead><tr><th>Number</th><th style="text-align:right">Where it stood</th>${dated ? '<th style="text-align:right">As of</th>' : ''}</tr></thead>`
+  const inner = `<div class="sect" data-keep>The brief</div>` +
+    `<h1 class="ttl" data-keep>${esc(has(audit.question) ? audit.question!.trim() : 'What this audit set out to do')}</h1>` +
+    (who ? `<p class="note" data-keep>${who}</p>` : '') +
+    splitBlk('The objective', paras(audit.objective), '<div data-items>%s</div>') +
+    splitBlk('The numbers it is judged on', rows, `<table class="ev tbl-kpi">${head}<tbody data-items>%s</tbody></table>`)
+  return pageOf({ kind: 'brief', label: 'Brief', cont: 'The brief' }, inner, running, folio)
+}
+
 /** What we found: the shape of the audit before any of the detail. */
-function summaryPage(findings: FindingFull[], running: string, folio: number): string {
+function summaryPage(audit: Audit, findings: FindingFull[], running: string, folio: number): string {
   const n = findings.length
   const scored = findings.filter((f) => f.score != null)
   const sized = findings.filter((f) => f.effort_days != null)
@@ -384,8 +408,19 @@ function summaryPage(findings: FindingFull[], running: string, folio: number): s
   const tallies = metricRows.length && owned.length
     ? `<section class="blk duo">${half('What is at risk', metricRows)}${half('Who owns the work', owned)}</section>`
     : splitBlk('What is at risk', metricRows, table('tbl-metric')) + splitBlk('Who owns the work', owned, table('tbl-own'))
+  // The written summary and the themes come from the Overview. A theme names
+  // only findings the client is shown, and one with none of them is left out.
+  const shownRef = new Map(findings.map((f) => [f.id, f.ref]))
+  const themeRows = themesOf(audit).filter((t) => has(t.title)).map((t) => {
+    const refs = t.finding_ids.map((id) => shownRef.get(id)).filter(Boolean) as string[]
+    return refs.length || has(t.note)
+      ? `<tr><td class="sub">${esc(t.title)}${has(t.note) ? `<span class="kpisrc">${esc(t.note)}</span>` : ''}</td><td class="dt">${refs.map((r) => `<span class="nw">${esc(r)}</span>`).join(', ')}</td></tr>`
+      : ''
+  }).filter(Boolean)
   const inner = `<div class="sect" data-keep>What we found</div><h1 class="ttl" data-keep>${esc(headline)}</h1>` +
+    splitBlk('In short', paras(audit.summary), '<div data-items>%s</div>') +
     bands +
+    splitBlk('The themes', themeRows, table('tbl-theme')) +
     splitBlk('Where they sit', catRows, table('tbl-cat')) +
     splitBlk('Highest scoring', top, table('tbl-top')) +
     tallies
@@ -423,8 +458,17 @@ function methodPage(audit: Audit, anyScored: boolean, running: string, folio: nu
       <tr><td class="dt">P4</td><td>The rest</td><td>Monitor</td></tr>
     </tbody></table>`) : ''
 
+  // The scope from the Overview, as a short table, with the note under it.
+  const sc = auditScopeOf(audit)
+  const scopeRows = ([['Domains', sc.hosts], ['Markets', sc.markets], ['Page types', sc.templates], ['Devices', sc.devices]] as [string, string[]][])
+    .filter(([, v]) => v.length)
+    .map(([k, v]) => `<tr><td class="dt">${k}</td><td>${esc(v.join(', '))}</td></tr>`)
+  const scopeTable = scopeRows.length ? `<table class="ev tbl-scope"><tbody>${scopeRows.join('')}</tbody></table>` : ''
+  const left = sc.excluded.map((x) => `<tr><td>${esc(x)}</td></tr>`)
+
   const said =
-    splitBlk('What was examined', paras(audit.scope_note), '<div data-items>%s</div>') +
+    splitBlk('What was examined', paras(audit.scope_note), '<div data-items>%s</div>', '', scopeTable) +
+    splitBlk('What was left out', left, '<table class="ev tbl-left"><tbody data-items>%s</tbody></table>') +
     splitBlk('What it was built from', sources, `<table class="ev tbl-src">${srcHead}<tbody data-items>%s</tbody></table>`) +
     splitBlk('What it could not see', paras(audit.gaps), '<div data-items>%s</div>') +
     priority
@@ -670,8 +714,9 @@ export function buildPrintDocument(
   // declared no method.
   const any = ordered.length > 0
   const methodHtml = methodPage(audit, scored.length > 0, running, 0)
+  const briefHtml = briefPage(audit, running, 0)
   const sheets: Record<SectionKey, number> = {
-    cover: 1, summary: any ? 1 : 0, contents: any ? 1 : 0, method: methodHtml ? 1 : 0,
+    cover: 1, brief: briefHtml ? 1 : 0, summary: any ? 1 : 0, contents: any ? 1 : 0, method: methodHtml ? 1 : 0,
     coverage: checks.length ? 1 : 0,
     findings: ordered.length, roadmap: any ? 1 : 0, appendix: any ? 1 : 0,
   }
@@ -700,7 +745,8 @@ export function buildPrintDocument(
 
   const built: Record<SectionKey, (folio: number) => string> = {
     cover: () => cover,
-    summary: (folio) => summaryPage(ordered, running, folio),
+    brief: (folio) => briefPage(audit, running, folio),
+    summary: (folio) => summaryPage(audit, ordered, running, folio),
     contents: (folio) => index(folio),
     method: (folio) => methodPage(audit, scored.length > 0, running, folio),
     coverage: (folio) => coveragePage(checks, refInDoc, audit.checklist_name, running, folio),

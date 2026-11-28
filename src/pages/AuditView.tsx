@@ -3,12 +3,12 @@ import Deliverables, { DeliverablesRail } from '../components/Deliverables'
 import { listExports, type ExportRow } from '../lib/exports'
 import { Link, useParams } from 'react-router-dom'
 import {
-  evidenceUrl, createFinding, getAudit, listBrands, listFindings, nextRef, updateAudit, updateFindings, withBands,
+  evidenceUrl, createFinding, getAudit, listBrands, listFindings, nextRef, updateAudit, withBands,
 } from '../lib/api'
-import { CascadeModal, type CascadeRow } from '../components/Fields'
-import { registryOf } from '../lib/derive'
 import type { Audit, Brand, FindingFull } from '../lib/types'
 import FindingEditor from '../components/FindingEditor'
+import Overview, { OVERVIEW_PARTS, type OverviewPart } from '../components/Overview'
+import { progress } from '../lib/overview'
 import LogicEditor from '../components/LogicEditor'
 import ExportModal from '../components/ExportModal'
 import { STAGE_LABEL, stage } from '../lib/lifecycle'
@@ -36,7 +36,8 @@ export default function AuditView() {
   // The checklist is optional, and so is everything that reads it: an audit
   // without one behaves exactly as it did before checklists existed.
   const [checks, setChecks] = useState<AuditCheck[]>([])
-  const [view, setView] = useState<'findings' | 'checks'>('findings')
+  const [view, setView] = useState<'overview' | 'findings' | 'checks'>('findings')
+  const [part, setPart] = useState<OverviewPart>('brief')
   const [cat, setCat] = useState<string | null>(null)
   const [ckFilter, setCkFilter] = useState<CheckFilter>('all')
   const [builder, setBuilder] = useState<{ templates: AuditTemplate[] } | null>(null)
@@ -71,6 +72,8 @@ export default function AuditView() {
         const fs = await listFindings(auditId)
         setFindings(fs)
         setSel(fs[0]?.id ?? null)
+        // An audit with nothing in it yet opens on its brief.
+        if (fs.length === 0) setView('overview')
         // Never the reason an audit fails to open.
         setChecks(await listChecks(auditId).catch(() => []))
       }
@@ -89,7 +92,6 @@ export default function AuditView() {
   // at a time: the list first, then the finding that was tapped. The classes
   // only mean something under the phone breakpoint; a desktop shows both.
   const [mview, setMview] = useState<'list' | 'detail'>('list')
-  const [metaOpen, setMetaOpen] = useState(false)
   // Where the list was scrolled to, so going back lands on the finding that
   // was just read instead of the top of the list.
   const listY = useRef(0)
@@ -150,13 +152,31 @@ export default function AuditView() {
   const cov = useMemo(() => coverage(checks), [checks])
   const checkGroups = useMemo(() => groupByPath(checks), [checks])
 
-  const switchView = (v: 'findings' | 'checks') => {
+  const switchView = (v: 'overview' | 'findings' | 'checks') => {
     setView(v)
     // On a narrow screen Deliverables is one of these tabs, so picking
     // another leaves it. On a wide one it is its own panel and stays put.
     if (!wide) setDlvOpen(false)
     setMview('list')
     if (phone()) window.scrollTo(0, 0)
+  }
+  /** Jump to one part of the Overview. On a phone that means leaving the list. */
+  const openPart = (id: OverviewPart) => {
+    if (mview === 'list') listY.current = window.scrollY
+    setPart(id)
+    setMview('detail')
+    // Scroll the pane, not the page: scrollIntoView also moves every scrolled
+    // ancestor and takes the list's tabs off screen with it.
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`ov-${id}`)
+      const pane = el?.closest('.pane') as HTMLElement | null
+      if (!el || !pane) return
+      if (pane.scrollHeight > pane.clientHeight + 1) {
+        pane.scrollTo({ top: el.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop - 16 })
+      } else {
+        window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 110 })
+      }
+    })
   }
   const openCategory = (c: string | null) => {
     if (mview === 'list') listY.current = window.scrollY
@@ -302,12 +322,19 @@ export default function AuditView() {
           </span>
         </div>
         <span className="grow" />
-        <button className="btn sm m-only" onClick={() => setMetaOpen((v) => !v)}>Settings</button>
         <button className="btn sm pri" onClick={openExport}>Export</button>
       </div>
 
       {/* Phones only: the way back to the list, and a step to the next finding
           without going back first. */}
+      {view === 'overview' && mview === 'detail' && (
+        <div className="mnav">
+          <button className="mnav-back" onClick={backToList}>
+            <span aria-hidden="true">&lsaquo;</span> Overview
+          </button>
+          <span className="mnav-n">{OVERVIEW_PARTS.find((x) => x.id === part)?.label}</span>
+        </div>
+      )}
       {view === 'checks' && mview === 'detail' && (
         <div className="mnav">
           <button className="mnav-back" onClick={backToList}>
@@ -336,6 +363,11 @@ export default function AuditView() {
         <div className="list">
           <div className="listbar">
             <div className="vtabs" role="tablist" aria-label="Audit views">
+              <button role="tab" aria-selected={!dlvInList && view === 'overview'}
+                className={'vtab' + (!dlvInList && view === 'overview' ? ' on' : '')}
+                onClick={() => switchView('overview')}>
+                Overview
+              </button>
               <button role="tab" aria-selected={!dlvInList && view === 'findings'}
                 className={'vtab' + (!dlvInList && view === 'findings' ? ' on' : '')}
                 onClick={() => switchView('findings')}>
@@ -363,6 +395,25 @@ export default function AuditView() {
             <Deliverables rows={exportRows} error={exportErr} onChanged={loadExports}
               onClose={() => setDlvOpen(false)} onExport={openExport} />
           )}
+
+          {!dlvInList && view === 'overview' && (() => {
+            const pr = progress(audit, findings)
+            const line: Record<OverviewPart, [string, string, boolean]> = {
+              brief: ['Question, objective, the numbers it is judged on', `${pr.brief.done}/${pr.brief.of}`, pr.brief.done === pr.brief.of],
+              scope: ['Domains, markets, page types, devices', `${pr.scope.done}/${pr.scope.of}`, pr.scope.done === pr.scope.of],
+              baseline: [pr.baseline.of === 0 ? 'No numbers named yet' : `${pr.baseline.done} of ${pr.baseline.of} measured`,
+                pr.baseline.of ? `${pr.baseline.done}/${pr.baseline.of}` : '--', pr.baseline.of > 0 && pr.baseline.done === pr.baseline.of],
+              summary: [`${pr.summary.written ? 'Written' : 'Not written'} · ${pr.summary.themes} ${pr.summary.themes === 1 ? 'theme' : 'themes'}`,
+                pr.summary.written ? 'Written' : '--', pr.summary.written],
+              details: [`${audit.status.replace('_', ' ')} · started ${audit.started_on ?? 'not set'}`, '', true],
+            }
+            return OVERVIEW_PARTS.map((x) => (
+              <div className="frow crow" key={x.id} aria-selected={part === x.id} onClick={() => openPart(x.id)}>
+                <span className="nm">{x.label}<span>{line[x.id][0]}</span></span>
+                {line[x.id][1] && <span className={`pill ${line[x.id][2] ? 'done' : 'none'}`}>{line[x.id][1]}</span>}
+              </div>
+            ))
+          })()}
 
           {!dlvInList && view === 'checks' && (cov.total === 0 ? (
             <div className="list-empty">
@@ -435,7 +486,25 @@ export default function AuditView() {
         </div>
 
         <div className="pane">
-          {view === 'checks' ? (
+          {view === 'overview' ? (
+            <Overview
+              audit={audit}
+              brand={brand}
+              brands={brands.filter((b) => b.org_id === audit.org_id)}
+              findings={findings}
+              checks={checks}
+              onChange={setAudit}
+              onBrand={(b) => { setBrand(b); setAudit({ ...audit, brand_id: b.id }) }}
+              onFindings={(ids, patch) => setFindings((p) => withBands(p.map((x) => (ids.includes(x.id) ? { ...x, ...patch } : x))))}
+              onOpenFinding={(id) => {
+                setView('findings')
+                openFinding(id)
+                // The finding starts at its top, where a scope flag is shown.
+                requestAnimationFrame(() => document.querySelector('.pane')?.scrollTo(0, 0))
+              }}
+              say={say}
+            />
+          ) : view === 'checks' ? (
             <Checklist
               audit={audit}
               checks={checks}
@@ -446,7 +515,12 @@ export default function AuditView() {
               onNote={setCheckNote}
               onRaise={raiseFinding}
               onRemove={removeCheck}
-              onOpenFinding={(id) => { setView('findings'); openFinding(id) }}
+              onOpenFinding={(id) => {
+                setView('findings')
+                openFinding(id)
+                // The finding starts at its top, where a scope flag is shown.
+                requestAnimationFrame(() => document.querySelector('.pane')?.scrollTo(0, 0))
+              }}
               onAdd={openBuilder}
               onSaveTemplate={saveAsTemplate}
             />
@@ -533,12 +607,6 @@ export default function AuditView() {
           <button onClick={() => setToast(null)} aria-label="Dismiss">&times;</button>
         </div>
       )}
-      <AuditMeta audit={audit} findings={findings} onChange={setAudit}
-        open={metaOpen} setOpen={setMetaOpen}
-        brands={brands.filter((b) => b.org_id === audit.org_id)}
-        onBrand={(b) => { setBrand(b); setAudit({ ...audit, brand_id: b.id }) }}
-        cycleDays={registryOf(brand).crawl_cycle_days}
-        onFindings={(ids, patch) => setFindings((p) => withBands(p.map((x) => (ids.includes(x.id) ? { ...x, ...patch } : x))))} />
     </>
   )
 }
@@ -555,156 +623,4 @@ function useWide(): boolean {
     return () => m.removeEventListener('change', on)
   }, [])
   return wide
-}
-
-/** Audit-level fields the document needs but the finding list does not show. */
-function AuditMeta({
-  audit, findings, onChange, onFindings, cycleDays, open, setOpen, brands, onBrand,
-}: {
-  open: boolean
-  brands: Brand[]
-  onBrand: (b: Brand) => void
-  setOpen: (fn: (v: boolean) => boolean) => void
-  audit: Audit
-  findings: FindingFull[]
-  cycleDays: number
-  onChange: (a: Audit) => void
-  onFindings: (ids: string[], patch: Partial<FindingFull>) => void
-}) {
-  const [cascade, setCascade] = useState<{
-    what: string; next: string; rows: CascadeRow[]; patch: Partial<FindingFull>
-  } | null>(null)
-  // What the audit held when the field was focused, so a cascade compares
-  // findings against the old audit value rather than the half-typed one.
-  const [before, setBefore] = useState<Audit>(audit)
-
-  const fmt = (d: string | null) => d ?? 'not set'
-
-  function commitStart() {
-    if (audit.started_on === before.started_on || !audit.started_on) return
-    updateAudit(audit.id, { started_on: audit.started_on })
-    const next = audit.started_on
-    const rows = findings.filter((f) => f.raised !== next).map((f) => ({
-      id: f.id, ref: f.ref, title: f.title, current: f.raised, preTick: f.raised === before.started_on,
-    }))
-    // In logic mode Verify by is derived from Found on, so it moves with it.
-    const patch: Partial<FindingFull> = { raised: next }
-    if (audit.mode === 'logic') {
-      const d = new Date(next + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + cycleDays)
-      patch.verify_by = d.toISOString().slice(0, 10)
-    }
-    if (rows.length) setCascade({ what: 'Found on', next, rows, patch })
-  }
-
-  function commitWindow() {
-    if (audit.evidence_from === before.evidence_from && audit.evidence_to === before.evidence_to) return
-    updateAudit(audit.id, { evidence_from: audit.evidence_from, evidence_to: audit.evidence_to })
-    const same = (f: FindingFull, a: Audit) => f.collected_from === a.evidence_from && f.collected_to === a.evidence_to
-    const rows = findings.filter((f) => !same(f, audit)).map((f) => ({
-      id: f.id, ref: f.ref, title: f.title,
-      current: `${fmt(f.collected_from)} to ${fmt(f.collected_to)}`,
-      preTick: same(f, before),
-    }))
-    if (rows.length) {
-      setCascade({
-        what: 'the evidence window',
-        next: `${fmt(audit.evidence_from)} to ${fmt(audit.evidence_to)}`,
-        rows,
-        patch: { collected_from: audit.evidence_from, collected_to: audit.evidence_to },
-      })
-    }
-  }
-
-  return (
-    <div className="am">
-      {open && (
-        <div className="am-panel">
-          <div className="am-hd m-only">
-            <b>Audit settings</b>
-            <button className="modal-x" aria-label="Close audit settings" onClick={() => setOpen(() => false)}>&times;</button>
-          </div>
-          <div className="fld">
-            <label>Audit title</label>
-            <input value={audit.title}
-              onChange={(e) => onChange({ ...audit, title: e.target.value })}
-              onBlur={() => updateAudit(audit.id, { title: audit.title })} />
-          </div>
-          <div className="fld">
-            <label>Brand</label>
-            <select value={audit.brand_id}
-              onChange={async (e) => {
-                const next = brands.find((b) => b.id === e.target.value)
-                if (!next || next.id === audit.brand_id) return
-                if (!confirm(`Move this audit to ${next.name}? Its report will be drawn with ${next.name}'s brand kit and registry.`)) return
-                try {
-                  await updateAudit(audit.id, { brand_id: next.id })
-                  onBrand(next)
-                } catch (err) {
-                  alert((err as Error).message)
-                }
-              }}>
-              {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
-            <div className="hint">Which brand this audit is for. Moving it keeps every finding.</div>
-          </div>
-          <div className="two">
-            <div className="fld">
-              <label>Status</label>
-              <select value={audit.status}
-                onChange={(e) => { const v = e.target.value as Audit['status']; onChange({ ...audit, status: v }); updateAudit(audit.id, { status: v }) }}>
-                <option value="draft">draft</option><option value="in_review">in review</option>
-                <option value="delivered">delivered</option><option value="archived">archived</option>
-              </select>
-            </div>
-            <div className="fld">
-              <label>URLs crawled</label>
-              <input type="number" value={audit.urls_crawled ?? ''}
-                onChange={(e) => onChange({ ...audit, urls_crawled: e.target.value ? Number(e.target.value) : null })}
-                onBlur={() => updateAudit(audit.id, { urls_crawled: audit.urls_crawled })} />
-            </div>
-          </div>
-          <div className="fld">
-            <label>Started on</label>
-            <input type="date" value={audit.started_on ?? ''}
-              onFocus={() => setBefore(audit)}
-              onChange={(e) => onChange({ ...audit, started_on: e.target.value || null })}
-              onBlur={commitStart} />
-            <div className="hint">Every new finding's Found on date starts here.</div>
-          </div>
-          <div className="fld">
-            <label>Evidence window</label>
-            <div className="two">
-              <input type="date" aria-label="Evidence from" value={audit.evidence_from ?? ''}
-                onFocus={() => setBefore(audit)}
-                onChange={(e) => onChange({ ...audit, evidence_from: e.target.value || null })}
-                onBlur={commitWindow} />
-              <input type="date" aria-label="Evidence to" value={audit.evidence_to ?? ''}
-                onFocus={() => setBefore(audit)}
-                onChange={(e) => onChange({ ...audit, evidence_to: e.target.value || null })}
-                onBlur={commitWindow} />
-            </div>
-            <div className="hint">The span the evidence covers. Every new finding starts with it.</div>
-          </div>
-          <div className="fld">
-            <label>Gaps</label>
-            <textarea value={audit.gaps ?? ''}
-              onChange={(e) => onChange({ ...audit, gaps: e.target.value })}
-              onBlur={() => updateAudit(audit.id, { gaps: audit.gaps })} />
-            <div className="hint">What was not available. An audit missing log files says so upfront.</div>
-          </div>
-        </div>
-      )}
-      <button className="btn am-fab" onClick={() => setOpen((v) => !v)}>
-        {open ? 'Close audit settings' : 'Audit settings'}
-      </button>
-      {cascade && (
-        <CascadeModal what={cascade.what} next={cascade.next} rows={cascade.rows}
-          onClose={() => setCascade(null)}
-          onApply={async (ids) => {
-            await updateFindings(ids, cascade.patch)
-            onFindings(ids, cascade.patch)
-          }} />
-      )}
-    </div>
-  )
 }

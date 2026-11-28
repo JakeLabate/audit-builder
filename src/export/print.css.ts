@@ -79,6 +79,10 @@ a{color:inherit}
 .ev td.num{font-family:var(--mono);text-align:right;white-space:nowrap;color:var(--ink);padding-left:4mm}
 .ev td.dt{font-family:var(--mono);color:var(--muted);font-size:8.2pt;padding-right:4mm}
 .ev td.sub{color:var(--ink)}
+.ev td .kpisrc{display:block;margin-top:.8mm;font-family:var(--mono);font-size:7.2pt;line-height:1.45;letter-spacing:.02em;color:var(--muted)}
+.tbl-scope td.dt{width:24%}
+.tbl-theme td.dt{width:30%;text-align:right;padding-left:4mm}
+.tbl-theme .nw{white-space:nowrap}
 .ev td.sub .s{display:block;margin-top:.5mm;font-size:8.2pt;line-height:1.4;color:var(--muted)}
 
 .evfig{margin-top:3.5mm;border:1px solid var(--line);border-radius:1.5mm;overflow:hidden;background:#fff;break-inside:avoid}

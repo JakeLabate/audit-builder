@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { kpisOf, outOfScope } from '../lib/overview'
 import type { Audit, Brand, Finding, FindingFull } from '../lib/types'
 import { updateFinding } from '../lib/api'
 import { BAND_LABEL, riskFactor, score as scoreOf } from '../lib/score'
@@ -165,6 +166,12 @@ export default function LogicEditor({
       </div>
 
       {err && <div className="lstop"><b>The database refused this</b>{err}</div>}
+      {(() => {
+        const why = outOfScope(f, audit)
+        return why.length > 0 && (
+          <div className="issue"><b>Outside this audit's scope</b>{why.join('; ')}. Widen the scope on the Overview, or narrow the finding.</div>
+        )
+      })()}
       {stop.length > 0 && (
         <div className="lstop">
           <b>Not saving until these are settled</b>
@@ -238,7 +245,20 @@ export default function LogicEditor({
         <M label="Metric at risk" note="From the registry, so exposure can be totalled across the audit.">
           <select value={f.metric_at_risk ?? ''} onChange={(e) => set('metric_at_risk', e.target.value || null)}>
             <option value="">Not set</option>
-            {reg.metrics.map((m) => <option key={m} value={m}>{m}</option>)}
+            {(() => {
+              const judged = [...new Set(kpisOf(audit).map((k) => k.name.trim()).filter(Boolean))]
+              const rest = reg.metrics.filter((m) => !judged.includes(m))
+              // A value from neither list, written before either existed, stays visible.
+              const stray = f.metric_at_risk && !judged.includes(f.metric_at_risk) && !rest.includes(f.metric_at_risk) ? [f.metric_at_risk] : []
+              return judged.length ? (
+                <>
+                  <optgroup label="This audit is judged on">{judged.map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
+                  {rest.length + stray.length > 0 && (
+                    <optgroup label="Registry">{[...rest, ...stray].map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
+                  )}
+                </>
+              ) : [...rest, ...stray].map((m) => <option key={m} value={m}>{m}</option>)
+            })()}
           </select>
         </M>
         <M label="Quantity">

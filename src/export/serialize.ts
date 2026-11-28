@@ -1,4 +1,5 @@
 import type { Audit, Brand, Example, FindingFull } from '../lib/types'
+import { auditScopeOf, kpisOf, themesOf } from '../lib/overview'
 import { describeScope, scopeOf } from '../lib/scope'
 
 /**
@@ -110,11 +111,19 @@ export function toDocument(brand: Brand, audit: Audit, findings: FindingFull[]) 
       audit: {
         title: audit.title,
         status: audit.status,
+        question: audit.question ?? null,
+        objective: audit.objective ?? null,
+        commissioned_by: audit.commissioned_by ?? null,
+        due_on: audit.due_on ?? null,
+        kpis: kpisOf(audit),
+        scope_lists: auditScopeOf(audit),
         scope: audit.scope_note,
         sources: audit.sources,
         gaps: audit.gaps,
         urls_crawled: audit.urls_crawled,
         delivered_on: audit.delivered_on,
+        summary: audit.summary ?? null,
+        themes: themesOf(audit),
       },
       generated: new Date().toISOString(),
       finding_count: findings.length,
