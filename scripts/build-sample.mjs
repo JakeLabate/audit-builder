@@ -31,21 +31,25 @@ const [brand] = await rest(`brands?id=eq.${audit.brand_id}&select=*`)
 const rows = await rest(`findings?audit_id=eq.${TEMPLATE_AUDIT}&select=*,examples(*)&order=position`)
 const scores = await rest(`finding_scores?audit_id=eq.${TEMPLATE_AUDIT}&select=id,score,risk_factor`)
 const byId = new Map(scores.map((s) => [s.id, s]))
-const band = (n) => (n >= 80 ? 'P1' : n >= 55 ? 'P2' : n >= 30 ? 'P3' : 'P4')
-const findings = rows
-  .map((f) => {
-    const s = byId.get(f.id)
-    return { ...f, score: s ? Number(s.score) : null, risk_factor: s?.risk_factor ?? null,
-             band: s ? band(Number(s.score)) : null }
-  })
-  .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+const scored = rows.map((f) => {
+  const s = byId.get(f.id)
+  return { ...f, score: s ? Number(s.score) : null, risk_factor: s?.risk_factor ?? null }
+})
 
 // The page builder is TypeScript, so bundle it for node rather than duplicating it.
 const out = '.sample-build'
-execSync(`npx esbuild src/export/pdf.ts src/lib/sheetcols.ts --bundle --format=esm --outdir=${out}`,
+execSync(`npx esbuild src/export/pdf.ts src/lib/sheetcols.ts src/lib/score.ts --bundle --format=esm --outdir=${out}`,
   { stdio: 'inherit' })
 const { buildPrintDocument } = await import(`../${out}/export/pdf.js`)
 const { resolveColumns, withRefs } = await import(`../${out}/lib/sheetcols.js`)
+const { bandsFor } = await import(`../${out}/lib/score.js`)
+
+// A band is a position inside the audit, the same rule the app uses, so the
+// sample's bands match what the sample audit shows on screen.
+const bands = bandsFor(scored)
+const findings = scored
+  .map((f) => ({ ...f, band: bands.get(f.id) ?? null }))
+  .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
 
 const html = buildPrintDocument(brand, audit, findings, 'Jake Labate, SEO Consultant', null, null)
 const first = html.indexOf('<div class="page"')
@@ -68,6 +72,9 @@ fs.writeFileSync('public/sample-report.json', JSON.stringify({
 fs.rmSync(out, { recursive: true, force: true })
 console.log(`public/sample-report.json: ${pages.length} pages, ${cols.length} columns`)
 console.log(`Now regenerate public/sample-pages/: the flipbook turns images, not live
-pages, because rotating an iframe in 3D re-rasterises it every frame. Render each
-page of the document above at 1191 x 1685 with the fit pass applied and save as
-WebP at quality 76, then set "images" in the JSON to their paths in order.`)
+pages, because rotating an iframe in 3D re-rasterises it every frame. Wrap the
+document with buildStandaloneDocument(html, PRINT_CSS, title) so the layout pass
+runs, wait for data-fit="done", render each .page at 1191 x 1685 (device scale
+1.5) and save as WebP at quality 76, then set "images" in the JSON to their paths
+in order. A long finding runs onto a second page, so expect more images than
+the source pages above.`)

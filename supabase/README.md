@@ -15,6 +15,7 @@ The app's own migrations, in order (the SQL for the newest lives in `supabase/mi
 | 20261123000000 | `field_review` | Audit `started_on` and evidence window, finding `scope` (segments plus an optional URL list), workspace `tools` table with RLS, two logic-mode rules retired, `seed_sample` copies the new columns |
 | 20261123000100 | `sample_taxonomy` | Moves the sample audit and every seeded copy onto the universal taxonomy, the new references, tools on every measurement row and scope segments |
 | 20261125100000 | `audit_checklists` | `audit_checks` (one row per check in an audit: pass, fail or not applicable, with the finding a fail raised) and `audit_templates` (a workspace's saved checklists, as snapshots), both with RLS; `audits.checklist_name`; `private.stamp_check` records who answered a check and when |
+| 20261128020339 | `sample_seed_full_copy_and_verifier_skips_samples` | `seed_sample` copies every column (client decision, implementation, checker result, outcome), exhibit images, the brand logo, the audit's compact setting and its checklist; `verifier_queue` skips sample audits, whose URLs sit on a reserved `.example` domain |
 
 ## Pull them into this repo
 

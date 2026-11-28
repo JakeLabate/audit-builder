@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type {
   AcceptanceCheck, AffectedParty, Audit, Brand, CheckKind, Example, FindingFull, FindingHistory,
 } from '../lib/types'
-import { CategoryPicker, EvidenceWindow, MeasurementsEditor, ScopeEditor } from './Fields'
+import { CategoryPicker, EvidenceWindow, ListInput, MeasurementsEditor, ScopeEditor } from './Fields'
 import { nextRefFor, refMatches } from '../lib/taxonomy'
 import { sourcesFrom } from '../lib/tools'
 import { BAND_LABEL, missingRequirements, riskFactor, score } from '../lib/score'
@@ -207,7 +207,7 @@ export default function FindingEditor({
     quantity_value: f.quantity_value, quantity_unit: f.quantity_unit,
     impact_basis: f.impact_basis, time_horizon: f.time_horizon, affects: f.affects,
     action: f.action, steps: f.steps, owner: f.owner, effort_days: f.effort_days,
-    dependencies: f.dependencies, wave: f.wave,
+    dependencies: f.dependencies, external_blockers: f.external_blockers, depends_on: f.depends_on, wave: f.wave,
     blast_radius: f.blast_radius, failure_likelihood: f.failure_likelihood, reversibility: f.reversibility,
     severity_weight: f.severity_weight, reach: f.reach, confidence_factor: f.confidence_factor, leverage: f.leverage,
     status: f.status, verification_method: f.verification_method,
@@ -221,7 +221,8 @@ export default function FindingEditor({
   const issues = missingRequirements(f)
 
   const num = (v: string) => (v === '' ? null : Number(v))
-  const list = (v: string) => v.split(',').map((s) => s.trim()).filter(Boolean)
+  // Older manual findings may hold blockers only in the legacy array.
+  const blockers = (f.external_blockers ?? []).length ? f.external_blockers : (f.dependencies ?? [])
 
   return (
     <div>
@@ -373,10 +374,32 @@ export default function FindingEditor({
           <F label="Owner"><input value={f.owner ?? ''} onChange={(e) => set('owner', e.target.value)} /></F>
           <F label="Effort, days"><input type="number" step="0.5" value={f.effort_days ?? ''} onChange={(e) => set('effort_days', num(e.target.value))} /></F>
           <F label="Wave"><input type="number" value={f.wave ?? ''} onChange={(e) => set('wave', num(e.target.value))} /></F>
-          <F label="Depends on">
-            <input value={f.dependencies.join(', ')} onChange={(e) => set('dependencies', list(e.target.value))} />
+          {/* The document, the register and the API read external_blockers.
+              The legacy dependencies array is kept in step for older readers
+              (the JSON and CSV exports), never edited on its own. */}
+          <F label="Waiting on">
+            <ListInput value={blockers} placeholder="A sign off, a deploy window"
+              onChange={(v) => setMany({ external_blockers: v, dependencies: v })} />
           </F>
         </div>
+        {all.length > 1 && (
+          <F label="Blocked by">
+            <div className="lchips">
+              {all.filter((o) => o.id !== f.id).map((o) => {
+                const on = (f.depends_on ?? []).includes(o.id)
+                return (
+                  <label key={o.id} className={'lchip' + (on ? ' on' : '')}>
+                    <input type="checkbox" checked={on}
+                      onChange={(e) => set('depends_on', e.target.checked
+                        ? [...(f.depends_on ?? []), o.id]
+                        : (f.depends_on ?? []).filter((x) => x !== o.id))} />
+                    {o.ref}
+                  </label>
+                )
+              })}
+            </div>
+          </F>
+        )}
       </G>
 
       <G name="Risk and priority" purpose="What could go wrong fixing it, and the inputs the score is computed from. None of these are typed opinions about the score itself.">

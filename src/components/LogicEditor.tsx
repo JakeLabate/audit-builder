@@ -6,7 +6,7 @@ import {
   blockers, deriveConfidenceFactor, deriveLeverage, deriveRef, deriveVerifyBy,
   deriveWave, EFFORT_BUCKETS, NEXT_STATUS, registryOf,
 } from '../lib/derive'
-import { CategoryPicker, EvidenceWindow, MeasurementsEditor, ScopeEditor } from './Fields'
+import { CategoryPicker, EvidenceWindow, ListInput, MeasurementsEditor, ScopeEditor } from './Fields'
 import { sourcesFrom } from '../lib/tools'
 
 /**
@@ -151,8 +151,6 @@ export default function LogicEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f])
 
-  const list = (v: string[]) => v.join(', ')
-  const toList = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean)
 
   return (
     <div className="logic">
@@ -289,8 +287,8 @@ export default function LogicEditor({
           </div>
         </M>
         <M label="External blockers" note="Things that are not findings: a deploy window, a sign off. Comma separated.">
-          <input value={list(f.external_blockers ?? [])}
-            onChange={(e) => set('external_blockers', toList(e.target.value))} />
+          <ListInput value={f.external_blockers ?? []}
+            onChange={(v) => set('external_blockers', v)} />
         </M>
         <D label="Wave" kind="Derived" value={wave.value ?? ''} how={wave.how} />
       </Group>

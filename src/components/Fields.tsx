@@ -377,3 +377,23 @@ export function CascadeModal({
     </div>
   )
 }
+
+/**
+ * A comma separated list typed into one box. The box keeps what was typed
+ * while it has focus, so a trailing comma or space survives long enough to
+ * type the next item; the parsed list is what gets saved.
+ */
+export function ListInput({ value, onChange, placeholder }: {
+  value: string[]
+  onChange: (v: string[]) => void
+  placeholder?: string
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const parse = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean)
+  return (
+    <input value={draft ?? value.join(', ')} placeholder={placeholder}
+      onFocus={() => setDraft(value.join(', '))}
+      onChange={(e) => { setDraft(e.target.value); onChange(parse(e.target.value)) }}
+      onBlur={() => setDraft(null)} />
+  )
+}
