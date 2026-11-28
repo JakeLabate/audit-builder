@@ -69,7 +69,9 @@ npm run dev
 
 ## MCP and the API
 
-The worker in `api/` serves both. An MCP client signs in with the person's
+The worker in `api/` serves both. The MCP address is
+`https://mcp.jakelabate.com/auditbuilder`, passed through to it by the `mcp`
+worker on that host. An MCP client signs in with the person's
 AuditBuilder account through Supabase's OAuth 2.1 server and approves the
 connection on `/oauth/consent`; the REST API takes a workspace key. Setup and
 the full flow are in `api/README.md`.

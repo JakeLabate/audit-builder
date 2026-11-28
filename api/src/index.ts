@@ -1,7 +1,10 @@
 /**
  * AuditBuilder API.
  *
- *   /mcp    MCP tools. Signs in with an AuditBuilder account (oauth.ts)
+ *   /mcp    MCP tools. Signs in with an AuditBuilder account (oauth.ts). The
+ *           public address is https://mcp.jakelabate.com/auditbuilder, which
+ *           reaches this worker as /auditbuilder
+ *   /render the app's PDF export
  *   /v1/*   a REST surface over brands, audits, findings and exhibits, by key
  *
  * Two ways in, one set of handlers: both surfaces resolve to a workspace and
@@ -10,7 +13,7 @@
 import { ApiError, rpc, type Env } from './db'
 import { audits, brands, examples, exports_, findings, schema, type Ctx } from './resources'
 import { handleMcp, TOOLS as MCP_TOOLS } from './mcp'
-import { authenticateMcp, protectedResource, SignInRequired } from './oauth'
+import { authenticateMcp, MCP_ADDRESS, MCP_PATHS, protectedResource, SignInRequired, WELL_KNOWN } from './oauth'
 import { handleRender } from './render'
 
 const CORS = {
@@ -33,13 +36,14 @@ export default {
     if (path === '/health') return json({ ok: true })
 
     // Where an MCP client learns how to sign in. Public by definition. Served
-    // at the root form and the path form, since clients try both.
-    if (path === '/.well-known/oauth-protected-resource'
-      || path === '/.well-known/oauth-protected-resource/mcp') {
-      return json(protectedResource(url.origin, env))
+    // at the path form for each address, and at the root form, since clients
+    // try both.
+    if (path === WELL_KNOWN) return json(protectedResource(`${url.origin}/mcp`, env))
+    if (path.startsWith(`${WELL_KNOWN}/`) && MCP_PATHS.includes(path.slice(WELL_KNOWN.length))) {
+      return json(protectedResource(url.origin + path.slice(WELL_KNOWN.length), env))
     }
 
-    if (path === '/mcp') {
+    if (MCP_PATHS.includes(path)) {
       try {
         const ctx = await authenticateMcp(req, env, (p) => exec.waitUntil(p.catch(() => {})))
         const res = await handleMcp(req, env, ctx)
@@ -47,7 +51,7 @@ export default {
         return res
       } catch (e) {
         if (e instanceof SignInRequired) {
-          return json({ error: e.message }, 401, { 'WWW-Authenticate': e.header(url.origin) })
+          return json({ error: e.message }, 401, { 'WWW-Authenticate': e.header(url.origin, path) })
         }
         if (e instanceof ApiError) return json({ error: e.message }, e.status)
         return json({ error: (e as Error).message }, 500)
@@ -163,7 +167,7 @@ async function route(
 const index = (origin: string) => ({
   name: 'AuditBuilder API',
   auth: 'Authorization: Bearer ab_live_...',
-  mcp: `${origin}/mcp`,
+  mcp: MCP_ADDRESS,
   mcp_auth: 'OAuth 2.1. Sign in with your AuditBuilder account from the MCP client; no key.',
   render: `${origin}/render`,
   scopes: ['read', 'write'],

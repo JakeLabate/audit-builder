@@ -1,7 +1,9 @@
 /** One place that knows where the worker lives. */
 export const API_BASE = 'https://audit-api.jake-a-labate.workers.dev'
 export const RENDER_URL = `${API_BASE}/render`
-export const MCP_URL = `${API_BASE}/mcp`
+/** The MCP address people add to their client. It is served by the mcp
+ *  worker on mcp.jakelabate.com, which passes it through to this API. */
+export const MCP_URL = 'https://mcp.jakelabate.com/auditbuilder'
 
 export interface ApiIndex {
   name: string
