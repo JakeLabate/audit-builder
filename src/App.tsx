@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import Login from './pages/Login'
 import Brands from './pages/Brands'
+import Audits from './pages/Audits'
 import BrandView from './pages/BrandView'
 import AuditView from './pages/AuditView'
 import McpPage from './pages/McpPage'
@@ -96,8 +97,11 @@ export default function App() {
   return (
     <Chrome session={session}>
       <Routes>
-        <Route path="/" element={<Brands />} />
-        <Route path="/brand/:brandId" element={<BrandView />} />
+        <Route path="/" element={<Navigate to="/audits" replace />} />
+        <Route path="/brands" element={<Brands />} />
+        <Route path="/brands/:brandId" element={<BrandView />} />
+        <Route path="/brand/:brandId" element={<OldBrandLink />} />
+        <Route path="/audits" element={<Audits />} />
         <Route path="/audit/:auditId" element={<AuditView />} />
         <Route path="/templates" element={<Templates />} />
         <Route path="/guide" element={<Guide />} />
@@ -111,4 +115,10 @@ export default function App() {
       </Routes>
     </Chrome>
   )
+}
+
+/** Brand pages used to live at /brand/:id. Old links and bookmarks still work. */
+function OldBrandLink() {
+  const { brandId } = useParams()
+  return <Navigate to={`/brands/${brandId}`} replace />
 }

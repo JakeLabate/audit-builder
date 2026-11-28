@@ -230,7 +230,7 @@ export default function Guide() {
       </section>
 
       <p className="doc-end">
-        <Link className="btn pri" to="/">Go to your brands</Link>
+        <Link className="btn pri" to="/audits">Go to your audits</Link>
       </p>
     </div>
   )
