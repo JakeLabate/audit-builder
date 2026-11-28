@@ -319,7 +319,10 @@ export async function handleMcp(req: Request, env: Env, ctx: Ctx): Promise<Respo
         const out = await tool.run(env, ctx, (p.arguments ?? {}) as Json)
         return json(ok(id, {
           content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
-          structuredContent: out && typeof out === 'object' ? out : { value: out },
+          // MCP requires an object here. A list comes back under items, so a
+          // client that validates the result does not reject every list tool.
+          structuredContent: Array.isArray(out) ? { items: out }
+            : out && typeof out === 'object' ? out : { value: out },
         }))
       } catch (e) {
         // A tool failure is a result, not a protocol error: the agent should

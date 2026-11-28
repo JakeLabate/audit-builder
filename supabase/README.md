@@ -21,7 +21,7 @@ The app's own migrations, in order (the SQL for the newest lives in `supabase/mi
 | 20261128032133 | `audit_brand_same_org_and_sample_seed_overview` | An audit's brand must be in the audit's workspace (trigger, so the API is held to it too). `seed_sample` copies the Overview, mapping theme membership to the copied findings |
 | 20261128032145 | `sample_template_overview` | The sample template's Overview, consistent with its findings |
 | 20261128033126 | `sample_template_brief_section` | The sample's document opens with The brief |
-| 20261128040000 | `sample_copies_overview` | Not applied yet. Gives sample audits already copied into workspaces the same Overview and brief page, only where those fields are empty and the sections untouched |
+| 20261128033751 | `sample_copies_overview` | Gives the 8 sample audits already copied into workspaces the same Overview and brief page, only where those fields were empty and the sections untouched |
 
 ## Pull them into this repo
 
